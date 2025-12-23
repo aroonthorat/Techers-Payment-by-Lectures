@@ -1,0 +1,5 @@
+{
+  "name": "Teacher Lecture Compensation System",
+  "description": "A comprehensive management system for coaching classes to track teacher attendance and manage batch-based lecture payments using a FIFO algorithm.",
+  "requestFramePermissions": []
+}
