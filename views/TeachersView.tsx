@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Check, Layers, User, Phone, X, IndianRupee, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, Layers, User, Phone, X, IndianRupee, Search, AlertCircle } from 'lucide-react';
 import { Teacher, ClassType, TeacherAssignment } from '../types';
 import { dbService } from '../firebase';
 
@@ -67,7 +67,6 @@ const TeachersView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-slide-up pb-10">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <h2 className="text-3xl md:text-4xl font-extrabold theme-text uppercase tracking-tighter leading-none">Human Resources</h2>
@@ -82,7 +81,6 @@ const TeachersView: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter/Search Bar */}
       <div className="relative max-w-md">
         <input 
           type="text"
@@ -94,7 +92,6 @@ const TeachersView: React.FC = () => {
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted" />
       </div>
 
-      {/* Personnel List View */}
       <div className="theme-card rounded-2xl overflow-hidden shadow-sm">
         <div className="hidden lg:grid grid-cols-[1.2fr_2fr_0.4fr] gap-6 px-10 py-5 bg-[var(--bg-main)] border-b border-[var(--border)] label-header">
           <div>PERSONNEL</div>
@@ -154,7 +151,6 @@ const TeachersView: React.FC = () => {
           </div>
       </div>
 
-      {/* Form Modal Overlay */}
       {showAdd && (
         <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4">
           <div className="theme-card w-full max-w-3xl rounded-2xl shadow-2xl p-8 md:p-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -175,7 +171,7 @@ const TeachersView: React.FC = () => {
                   value={formData.name}
                   disabled={!!editingId}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-4 rounded-xl font-bold disabled:opacity-50" 
+                  className="w-full px-4 py-4 rounded-xl font-bold disabled:opacity-50 theme-card" 
                   placeholder="Official Name"
                 />
               </div>
@@ -184,7 +180,7 @@ const TeachersView: React.FC = () => {
                 <input 
                   value={formData.phone}
                   onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-4 rounded-xl font-bold"
+                  className="w-full px-4 py-4 rounded-xl font-bold theme-card"
                   placeholder="+91..."
                 />
               </div>
@@ -201,6 +197,15 @@ const TeachersView: React.FC = () => {
                 </button>
               </div>
 
+              {classes.length === 0 && (
+                <div className="flex items-center gap-3 bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                  <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">
+                    No classes found. Please create a class in the "CLASSES" tab first.
+                  </p>
+                </div>
+              )}
+
               <div className="grid gap-4">
                 {formData.assignments.map((asg, idx) => (
                   <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-[var(--bg-main)] p-6 rounded-xl border border-[var(--border)]">
@@ -209,7 +214,7 @@ const TeachersView: React.FC = () => {
                       <select 
                         value={asg.classId}
                         onChange={e => handleAsgChange(idx, 'classId', e.target.value)}
-                        className="w-full p-3 text-xs font-bold rounded-lg"
+                        className="w-full p-3 text-xs font-bold rounded-lg theme-card"
                       >
                         <option value="">Select Target</option>
                         {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -220,7 +225,7 @@ const TeachersView: React.FC = () => {
                       <input 
                         value={asg.subject}
                         onChange={e => handleAsgChange(idx, 'subject', e.target.value)}
-                        className="w-full p-3 text-xs font-bold rounded-lg"
+                        className="w-full p-3 text-xs font-bold rounded-lg theme-card"
                         placeholder="e.g. Physics"
                       />
                     </div>
@@ -231,13 +236,13 @@ const TeachersView: React.FC = () => {
                           type="number"
                           value={asg.rate}
                           onChange={e => handleAsgChange(idx, 'rate', Number(e.target.value))}
-                          className="w-full p-3 pl-8 text-xs font-bold rounded-lg"
+                          className="w-full p-3 pl-8 text-xs font-bold rounded-lg theme-card"
                         />
                         <IndianRupee className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 theme-text-muted opacity-50" />
                       </div>
                     </div>
                     <div className="flex items-end">
-                      <button onClick={() => handleRemoveAssignment(idx)} className="text-rose-500 hover:bg-rose-50 p-3 rounded-lg transition-all w-full flex justify-center border border-transparent hover:border-rose-100">
+                      <button onClick={() => handleRemoveAssignment(idx)} className="text-rose-500 hover:bg-rose-500/10 p-3 rounded-lg transition-all w-full flex justify-center border border-transparent hover:border-rose-500/20">
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>

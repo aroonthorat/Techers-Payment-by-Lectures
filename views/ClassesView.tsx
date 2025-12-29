@@ -38,12 +38,12 @@ const ClassesView: React.FC = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Classes & Batches</h2>
-          <p className="text-slate-500 font-medium">Define course names and payment milestones</p>
+          <h2 className="text-2xl font-bold theme-text uppercase tracking-tight">Classes & Batches</h2>
+          <p className="theme-text-muted font-medium">Define course names and payment milestones</p>
         </div>
         <button 
           onClick={() => setShowAdd(true)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-indigo-700 shadow-md transition-all"
+          className="theme-bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:brightness-110 shadow-md transition-all"
         >
           <Plus className="w-5 h-5" />
           Create Class
@@ -51,29 +51,29 @@ const ClassesView: React.FC = () => {
       </div>
 
       {showAdd && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 animate-in zoom-in-95 duration-200">
+        <div className="theme-card p-6 rounded-2xl shadow-sm border animate-in zoom-in-95 duration-200">
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Class Name</label>
+              <label className="block text-[10px] font-black theme-text-muted uppercase tracking-widest mb-1 ml-1">Class Name</label>
               <input 
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none font-bold" 
+                className="w-full theme-card rounded-xl p-3 focus:ring-2 focus:ring-[var(--primary)] outline-none font-bold" 
                 placeholder="Physics XII - Batch A"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Batch Size (Lectures)</label>
+              <label className="block text-[10px] font-black theme-text-muted uppercase tracking-widest mb-1 ml-1">Batch Size (Lectures)</label>
               <input 
                 type="number"
                 value={formData.batchSize}
                 onChange={e => setFormData({ ...formData, batchSize: Number(e.target.value) })}
-                className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                className="w-full theme-card rounded-xl p-3 focus:ring-2 focus:ring-[var(--primary)] outline-none font-bold"
               />
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all">Save Class</button>
-              <button type="button" onClick={() => setShowAdd(false)} className="bg-slate-100 text-slate-600 px-4 py-3 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all">Cancel</button>
+              <button type="submit" className="flex-1 theme-bg-primary text-white px-4 py-3 rounded-xl font-black uppercase tracking-widest text-xs hover:brightness-110 transition-all">Save Class</button>
+              <button type="button" onClick={() => setShowAdd(false)} className="bg-[var(--bg-main)] theme-text-muted px-4 py-3 rounded-xl font-bold text-xs hover:brightness-95 transition-all">Cancel</button>
             </div>
           </form>
         </div>
@@ -81,30 +81,30 @@ const ClassesView: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {classes.length === 0 ? (
-          <div className="col-span-full py-24 text-center text-slate-400 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+          <div className="col-span-full py-24 text-center theme-text-muted bg-[var(--bg-card)] rounded-[2.5rem] border border-dashed theme-border">
             <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-10" />
-            <h3 className="text-lg font-black uppercase tracking-widest text-slate-300">No classes defined</h3>
+            <h3 className="text-lg font-black uppercase tracking-widest theme-text-muted opacity-40">No classes defined</h3>
           </div>
         ) : (
           classes.map(cls => (
-            <div key={cls.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:shadow-md transition-all group relative overflow-hidden">
+            <div key={cls.id} className="theme-card p-8 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
               <div className="flex justify-between items-start mb-6">
-                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <div className="w-14 h-14 bg-[var(--primary-light)] theme-primary rounded-2xl flex items-center justify-center">
                   <BookOpen className="w-7 h-7" />
                 </div>
                 <button 
                   onClick={() => handleDelete(cls.id)}
-                  className="text-slate-300 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-all"
+                  className="theme-text-muted hover:text-rose-500 p-2 rounded-lg hover:bg-rose-500/10 transition-all"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <h3 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">{cls.name}</h3>
-              <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 w-fit">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cycle:</span>
-                <span className="text-sm font-black text-indigo-600">{cls.batchSize} Lectures</span>
+              <h3 className="text-xl font-black theme-text mb-2 uppercase tracking-tighter">{cls.name}</h3>
+              <div className="flex items-center gap-2 bg-[var(--bg-main)] px-4 py-2 rounded-xl border theme-border w-fit">
+                <span className="text-[10px] font-black theme-text-muted uppercase tracking-widest">Cycle:</span>
+                <span className="text-sm font-black theme-primary">{cls.batchSize} Lectures</span>
               </div>
-              <p className="mt-4 text-[10px] font-bold text-slate-400 leading-relaxed italic">Rates are defined per teacher in the Management tab.</p>
+              <p className="mt-4 text-[10px] font-bold theme-text-muted leading-relaxed italic opacity-60">Rates are defined per teacher in the Management tab.</p>
             </div>
           ))
         )}

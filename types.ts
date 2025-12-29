@@ -1,17 +1,27 @@
 
 export enum AttendanceStatus {
-  PENDING = 'pending',
+  SUBMITTED = 'submitted',
+  VERIFIED = 'verified',
   PAID = 'paid'
 }
 
 export enum EventType {
   ATTENDANCE_MARK = 'attendance_mark',
+  ATTENDANCE_VERIFY = 'attendance_verify',
   ATTENDANCE_REMOVE = 'attendance_remove',
   PAYMENT_PROCESSED = 'payment_processed',
   RATE_CHANGE = 'rate_change',
   TEACHER_ADD = 'teacher_add',
   ADVANCE_GRANTED = 'advance_granted',
   ADVANCE_SETTLED = 'advance_settled'
+}
+
+export type UserRole = 'management' | 'teacher';
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  role: UserRole;
 }
 
 export interface SystemEvent {
