@@ -9,9 +9,12 @@ import {
   Clock,
   User,
   Activity,
-  Calendar as CalIcon
+  Calendar as CalIcon,
+  CheckCircle2,
+  ShieldCheck,
+  Loader2
 } from 'lucide-react';
-import { Attendance, Payment, SystemEvent, Teacher, ClassType } from '../types';
+import { Attendance, Payment, SystemEvent, Teacher, ClassType, AttendanceStatus } from '../types';
 import { dbService } from '../firebase';
 
 const MasterCalendarView: React.FC = () => {
@@ -35,6 +38,8 @@ const MasterCalendarView: React.FC = () => {
     payments: Payment[],
     system: SystemEvent[]
   } | null>(null);
+  
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const load = async () => {
     const [a, p, e, t, c] = await Promise.all([
@@ -82,6 +87,61 @@ const MasterCalendarView: React.FC = () => {
     setSelectedDayEvents({ date: dateStr, ...dayData });
   };
 
+  const handleVerify = async (attId: string) => {
+    setIsProcessing(true);
+    try {
+      await dbService.verifyAttendance(attId);
+      
+      // Update local modal state immediately
+      setSelectedDayEvents(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          attendance: prev.attendance.map(a => a.id === attId ? { ...a, status: AttendanceStatus.VERIFIED } : a)
+        };
+      });
+      
+      // Refresh background data
+      await load();
+    } catch (error) {
+      console.error("Verification failed", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleVerifyAll = async () => {
+    if (!selectedDayEvents) return;
+    const pending = selectedDayEvents.attendance.filter(a => a.status === AttendanceStatus.SUBMITTED);
+    if (pending.length === 0) return;
+
+    if (!confirm(`Confirm verification for ${pending.length} lectures?`)) return;
+
+    setIsProcessing(true);
+    try {
+      // Process sequentially to ensure order (or could be parallel)
+      for (const record of pending) {
+        await dbService.verifyAttendance(record.id);
+      }
+
+      // Update local modal state immediately
+      setSelectedDayEvents(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          attendance: prev.attendance.map(a => a.status === AttendanceStatus.SUBMITTED ? { ...a, status: AttendanceStatus.VERIFIED } : a)
+        };
+      });
+
+      // Refresh background data
+      await load();
+    } catch (error) {
+      console.error("Bulk verification failed", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
@@ -126,6 +186,7 @@ const MasterCalendarView: React.FC = () => {
             const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toISOString().split('T')[0];
             const dayMeta = calendarData[dateStr];
             const isToday = dateStr === todayStr;
+            const hasPending = dayMeta?.attendance.some(a => a.status === AttendanceStatus.SUBMITTED);
             
             return (
               <div 
@@ -140,14 +201,14 @@ const MasterCalendarView: React.FC = () => {
                   <span className={`text-base md:text-2xl font-black tracking-tighter transition-colors ${isToday ? 'theme-primary' : 'theme-text opacity-90'}`}>
                     {day < 10 ? `0${day}` : day}
                   </span>
-                  {isToday && (
-                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full theme-bg-primary animate-pulse"></div>
+                  {hasPending && (
+                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]"></div>
                   )}
                 </div>
 
                 <div className="mt-2 md:mt-4 flex flex-wrap gap-1 md:gap-2">
                   {dayMeta?.attendance && dayMeta.attendance.length > 0 && (
-                    <div className="flex items-center gap-1 bg-amber-500 text-white px-1.5 py-0.5 md:px-2 md:py-1 rounded-md md:rounded-lg shadow-sm">
+                    <div className={`flex items-center gap-1 text-white px-1.5 py-0.5 md:px-2 md:py-1 rounded-md md:rounded-lg shadow-sm ${hasPending ? 'bg-amber-500' : 'theme-bg-primary'}`}>
                        <Zap className="w-2.5 h-2.5 md:w-3 md:h-3 fill-white shrink-0" />
                        <span className="text-[8px] md:text-[10px] font-black uppercase">{dayMeta.attendance.length}</span>
                     </div>
@@ -197,7 +258,21 @@ const MasterCalendarView: React.FC = () => {
                     <div className="w-4 md:w-6 h-1 bg-amber-500 rounded-full"></div>
                     LECTURE MARKINGS
                   </h4>
-                  <span className="text-[9px] md:text-[11px] font-black theme-primary bg-[var(--primary-light)] px-3 py-1 md:px-4 md:py-1.5 rounded-full">{selectedDayEvents.attendance.length} UNITS</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] md:text-[11px] font-black theme-primary bg-[var(--primary-light)] px-3 py-1 md:px-4 md:py-1.5 rounded-full">{selectedDayEvents.attendance.length} UNITS</span>
+                    
+                    {/* Confirm All Button */}
+                    {selectedDayEvents.attendance.some(a => a.status === AttendanceStatus.SUBMITTED) && (
+                      <button 
+                        onClick={handleVerifyAll}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-md disabled:opacity-50"
+                      >
+                         {isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                         CONFIRM ALL
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 {selectedDayEvents.attendance.length === 0 ? (
@@ -209,21 +284,36 @@ const MasterCalendarView: React.FC = () => {
                     {selectedDayEvents.attendance.map(a => {
                       const teacher = data.teachers.find(t => t.id === a.teacherId);
                       const cls = data.classes.find(c => c.id === a.classId);
+                      const isPending = a.status === AttendanceStatus.SUBMITTED;
+                      
                       return (
-                        <div key={a.id} className="theme-card p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border theme-border shadow-sm flex flex-col gap-4 md:gap-5">
+                        <div key={a.id} className={`theme-card p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border transition-all ${isPending ? 'border-amber-500/30 bg-amber-500/5' : 'theme-border shadow-sm'} flex flex-col gap-4 md:gap-5`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 md:gap-4">
-                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl theme-bg-primary flex items-center justify-center text-white shadow-lg">
+                              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center text-white shadow-lg ${isPending ? 'bg-amber-500' : 'theme-bg-primary'}`}>
                                 <User className="w-5 h-5 md:w-6 md:h-6" />
                               </div>
                               <div>
                                 <div className="text-sm md:text-base font-black theme-text uppercase tracking-tighter">{teacher?.name}</div>
-                                <div className="text-[8px] md:text-[9px] font-black theme-primary uppercase tracking-widest">{cls?.name}</div>
+                                <div className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest ${isPending ? 'text-amber-600' : 'theme-primary'}`}>{cls?.name}</div>
                               </div>
                             </div>
-                            <div className={`text-[8px] md:text-[9px] font-black px-3 py-1 md:px-4 md:py-1.5 rounded-full uppercase border-2 ${a.status === 'paid' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                               {a.status}
-                            </div>
+                            
+                            {/* Status or Action Button */}
+                            {isPending ? (
+                              <button 
+                                onClick={() => handleVerify(a.id)}
+                                disabled={isProcessing}
+                                className="flex items-center gap-2 bg-white border border-amber-200 text-amber-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                              >
+                                {isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                VERIFY
+                              </button>
+                            ) : (
+                              <div className={`text-[8px] md:text-[9px] font-black px-3 py-1 md:px-4 md:py-1.5 rounded-full uppercase border-2 ${a.status === 'paid' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
+                                 {a.status}
+                              </div>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-2 md:gap-3 px-4 py-2 md:px-5 md:py-3 bg-[var(--bg-main)] rounded-xl md:rounded-2xl border theme-border w-fit">

@@ -28,7 +28,7 @@ export interface SystemEvent {
   id: string;
   type: EventType;
   timestamp: string;
-  teacherName: string;
+  teacherName: string; 
   description: string;
   amount?: number;
 }
@@ -45,7 +45,7 @@ export interface Advance {
   teacherId: string;
   amount: number;
   date: string;
-  remainingAmount: number; // For tracking partial settlements
+  remainingAmount: number;
   notes?: string;
 }
 
@@ -77,11 +77,40 @@ export interface Payment {
   id: string;
   teacherId: string;
   classId: string;
-  amount: number; // Gross amount for lectures
-  advanceDeduction: number; // Amount adjusted from advance balance
-  netDisbursement: number; // Actual money paid now (amount - advanceDeduction)
+  amount: number;
+  advanceDeduction: number;
+  netDisbursement: number;
   lectureCount: number;
   datePaid: string;
   startDateCovered: string;
   endDateCovered: string;
+}
+
+export interface Enrollment {
+  classId: string;
+  totalFee: number;
+  enrolledAt: string;
+}
+
+export interface Student {
+  id: string;
+  name: string;
+  phone: string;
+  enrollments: Enrollment[];
+}
+
+export interface FeePayment {
+  id: string;
+  studentId: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
+// Configuration for App Updates
+export interface AppConfig {
+  latestVersion: string; // e.g. "1.0.1"
+  downloadUrl: string;   // Link to the new APK
+  forceUpdate: boolean;  // If true, user cannot close the modal
+  releaseNotes?: string;
 }

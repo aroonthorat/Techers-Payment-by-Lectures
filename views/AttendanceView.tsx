@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Lock, Calendar as CalIcon, User, Book, CheckCircle, ShieldAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Calendar as CalIcon, User, Book, CheckCircle, ShieldAlert, AlertCircle } from 'lucide-react';
 import { Teacher, ClassType, Attendance, AttendanceStatus, AuthUser } from '../types';
 import { dbService } from '../firebase';
 
 interface AttendanceViewProps {
   forcedTeacherId?: string;
+  preselectedTeacherId?: string;
 }
 
-const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId }) => {
+const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId, preselectedTeacherId }) => {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [classes, setClasses] = useState<ClassType[]>([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(forcedTeacherId || '');
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(forcedTeacherId || preselectedTeacherId || '');
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -37,9 +38,16 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId }) => {
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { loadContext(); }, [selectedTeacherId, selectedClassId]);
+  
+  // Handle preselection updates
+  useEffect(() => {
+    if (preselectedTeacherId && !forcedTeacherId) {
+      setSelectedTeacherId(preselectedTeacherId);
+    }
+  }, [preselectedTeacherId, forcedTeacherId]);
 
   useEffect(() => {
-    if (!forcedTeacherId) {
+    if (!forcedTeacherId && !selectedTeacherId) {
       setSelectedClassId('');
       setAttendance([]);
     }
@@ -61,14 +69,23 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId }) => {
     if (existing) {
       if (existing.status === AttendanceStatus.PAID) return;
       
-      // If Admin clicks on a submitted log, verify it instead of removing it
+      // Admin Verification Workflow
       if (isAdmin && existing.status === AttendanceStatus.SUBMITTED) {
-        await dbService.verifyAttendance(existing.id);
-        loadContext();
+        if (confirm("Verify this submitted lecture?")) {
+          await dbService.verifyAttendance(existing.id);
+          loadContext();
+        }
+        return;
+      }
+
+      // Teacher Workflow: Cannot toggle if verified
+      if (!isAdmin && existing.status !== AttendanceStatus.SUBMITTED) {
+        alert("Verified records cannot be modified. Contact administration.");
         return;
       }
     }
 
+    // Normal Toggle (Create Pending for Teacher, Create Verified for Admin)
     try {
       await dbService.toggleAttendance(selectedTeacherId, selectedClassId, dateStr, isAdmin);
       loadContext();
@@ -88,18 +105,22 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId }) => {
     <div className="space-y-8 animate-slide-up">
       <div className="flex flex-col gap-1.5">
         <h2 className="text-2xl md:text-4xl font-extrabold theme-text uppercase tracking-tighter">ATTENDANCE</h2>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
            <p className="text-xs md:text-sm font-medium theme-text-muted">
-            {forcedTeacherId ? 'Log your lecture completion' : 'Audit and verify staff lecture logs'}
+            {forcedTeacherId ? 'Click a date to submit your lecture for approval.' : 'Review and verify staff submissions below.'}
           </p>
           <div className="flex gap-4">
              <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Submitted</span>
+                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Submitted (Pending)</span>
              </div>
              <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full theme-bg-primary"></div>
                 <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Verified</span>
+             </div>
+             <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Paid</span>
              </div>
           </div>
         </div>
@@ -181,14 +202,20 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId }) => {
             const isSubmitted = record?.status === AttendanceStatus.SUBMITTED;
             const isFuture = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day) > today;
             
+            // Logic for visual state
+            let boxClass = 'cursor-pointer hover:bg-[var(--primary-light)]/20';
+            if (isFuture) boxClass = 'opacity-30 pointer-events-none cursor-default';
+            if (isPaid) boxClass = 'cursor-default';
+            // Teachers cannot modify verified records
+            if (!isAdmin && isVerified) boxClass = 'cursor-default opacity-80';
+
             return (
               <div 
                 key={day} 
                 onClick={() => !isPaid && !isFuture && toggleDay(day)}
                 className={`
                   bg-[var(--bg-card)] h-24 md:h-36 p-4 relative transition-all duration-300 flex flex-col items-center justify-center group overflow-hidden
-                  ${isPaid || isFuture ? 'cursor-default' : 'cursor-pointer hover:bg-[var(--primary-light)]/20'} 
-                  ${isFuture ? 'opacity-30 pointer-events-none' : ''}
+                  ${boxClass}
                 `}
               >
                 <span className={`text-sm font-extrabold mb-1 transition-colors ${isPaid ? 'text-emerald-500' : isVerified ? 'theme-primary' : isSubmitted ? 'text-amber-500' : 'theme-text-muted opacity-40 group-hover:opacity-80'}`}>
@@ -201,7 +228,7 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId }) => {
                     ${isPaid ? 'bg-emerald-500 border-emerald-600' : isVerified ? 'theme-bg-primary border-[var(--primary)]' : 'bg-amber-500 border-amber-600'}
                     group-active:scale-90
                   `}>
-                    {isPaid ? <Lock className="w-4 h-4 md:w-5 md:h-5 text-white" /> : isVerified ? <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" /> : <ShieldAlert className="w-4 h-4 md:w-5 md:h-5 text-white animate-pulse" />}
+                    {isPaid ? <Lock className="w-4 h-4 md:w-5 md:h-5 text-white" /> : isVerified ? <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" /> : <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-white animate-pulse" />}
                   </div>
                 )}
                 

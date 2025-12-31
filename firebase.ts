@@ -8,13 +8,14 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
+  getDoc,
   query, 
   where, 
   orderBy, 
   limit, 
   writeBatch,
   Firestore,
-  DocumentData
+  setDoc
 } from "firebase/firestore";
 import { 
   Teacher, 
@@ -25,7 +26,10 @@ import {
   SystemEvent, 
   EventType, 
   Payment,
-  Advance
+  Advance,
+  Student,
+  FeePayment,
+  AppConfig
 } from './types';
 
 const getEnv = (key: string): string | undefined => {
@@ -33,7 +37,6 @@ const getEnv = (key: string): string | undefined => {
     if (process.env[key]) return process.env[key];
     if (process.env[`VITE_${key}`]) return process.env[`VITE_${key}`];
   }
-  
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     const env = (import.meta as any).env;
     if (env[key]) return env[key];
@@ -74,31 +77,62 @@ interface LocalDB {
   payments: Payment[];
   advances: Advance[];
   activityLog: SystemEvent[];
+  students: Student[];
+  feePayments: FeePayment[];
 }
 
 const getLocalData = (): LocalDB => {
   const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (!data) return { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [] };
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    return { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [] };
-  }
+  if (!data) return { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [], students: [], feePayments: [] };
+  try { 
+    const parsed = JSON.parse(data);
+    return {
+      teachers: parsed.teachers || [],
+      classes: parsed.classes || [],
+      attendance: parsed.attendance || [],
+      payments: parsed.payments || [],
+      advances: parsed.advances || [],
+      activityLog: parsed.activityLog || [],
+      students: parsed.students || [],
+      feePayments: parsed.feePayments || []
+    };
+  } catch (e) { return { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [], students: [], feePayments: [] }; }
 };
 
-const saveLocalData = (data: LocalDB) => {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
-};
-
+const saveLocalData = (data: LocalDB) => { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data)); };
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export const dbService = {
+  // Update Checker
+  checkAppUpdates: async (): Promise<AppConfig | null> => {
+    if (!db) return null;
+    try {
+      // We look for a collection 'system_config' and doc 'mobile_app'
+      const docRef = doc(db, 'system_config', 'mobile_app');
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return snap.data() as AppConfig;
+      } else {
+        // Create default if not exists to make it easier for admin to find
+        await setDoc(docRef, {
+           latestVersion: '1.0.0',
+           downloadUrl: '',
+           forceUpdate: false,
+           releaseNotes: 'Initial Release'
+        });
+      }
+    } catch (e) {
+      console.warn("Update check failed", e);
+    }
+    return null;
+  },
+
   getTeachers: async (): Promise<Teacher[]> => {
     if (db) {
       try {
         const snapshot = await getDocs(collection(db, 'teachers'));
         return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Teacher));
-      } catch (e) { console.warn("Firestore error, reading local..."); }
+      } catch (e) {}
     }
     return getLocalData().teachers;
   },
@@ -111,6 +145,86 @@ export const dbService = {
       } catch (e) {}
     }
     return getLocalData().classes;
+  },
+
+  getStudents: async (): Promise<Student[]> => {
+    if (db) {
+      try {
+        const snapshot = await getDocs(collection(db, 'students'));
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Student));
+      } catch (e) {}
+    }
+    return getLocalData().students;
+  },
+
+  addStudent: async (student: Omit<Student, 'id'>) => {
+    if (db) {
+      try {
+        const docRef = await addDoc(collection(db, 'students'), student);
+        return { id: docRef.id, ...student };
+      } catch (e) {}
+    }
+    const data = getLocalData();
+    const newStudent = { id: generateId(), ...student };
+    data.students.push(newStudent);
+    saveLocalData(data);
+    return newStudent;
+  },
+
+  updateStudent: async (id: string, student: Partial<Student>) => {
+    if (db) {
+      try { await updateDoc(doc(db, 'students', id), student); } catch (e) {}
+    } else {
+      const data = getLocalData();
+      const idx = data.students.findIndex(s => s.id === id);
+      if (idx !== -1) {
+        data.students[idx] = { ...data.students[idx], ...student };
+        saveLocalData(data);
+      }
+    }
+  },
+
+  // Bulk Import Logic
+  bulkImportStudents: async (payload: { student: Omit<Student, 'id'>, payments: Omit<FeePayment, 'id' | 'studentId'>[] }[]) => {
+    if (db) {
+      try {
+        const batch = writeBatch(db);
+        
+        for (const item of payload) {
+          // Create Student Ref
+          const studentRef = doc(collection(db, 'students'));
+          batch.set(studentRef, item.student);
+          
+          // Create Payment Refs linked to Student
+          for (const pay of item.payments) {
+            const payRef = doc(collection(db, 'feePayments'));
+            batch.set(payRef, {
+              ...pay,
+              studentId: studentRef.id
+            });
+          }
+        }
+        await batch.commit();
+        return;
+      } catch (e) {
+        throw e;
+      }
+    } else {
+      const data = getLocalData();
+      for (const item of payload) {
+        const studentId = generateId();
+        data.students.push({ id: studentId, ...item.student });
+        
+        for (const pay of item.payments) {
+          data.feePayments.push({
+            id: generateId(),
+            studentId: studentId,
+            ...pay
+          });
+        }
+      }
+      saveLocalData(data);
+    }
   },
 
   getAdvances: async (teacherId?: string): Promise<Advance[]> => {
@@ -131,22 +245,9 @@ export const dbService = {
   addAdvance: async (teacherId: string, amount: number, notes?: string) => {
     const teachers = await dbService.getTeachers();
     const teacher = teachers.find(t => t.id === teacherId);
-    const advanceData = {
-      teacherId,
-      amount,
-      remainingAmount: amount,
-      date: new Date().toISOString(),
-      notes: notes || 'Advance Payment'
-    };
-
+    const advanceData = { teacherId, amount, remainingAmount: amount, date: new Date().toISOString(), notes: notes || 'Advance Payment' };
     if (db) {
-      try {
-        await addDoc(collection(db, 'advances'), advanceData);
-      } catch (e) {
-        const data = getLocalData();
-        data.advances.push({ id: generateId(), ...advanceData });
-        saveLocalData(data);
-      }
+      try { await addDoc(collection(db, 'advances'), advanceData); } catch (e) {}
     } else {
       const data = getLocalData();
       data.advances.push({ id: generateId(), ...advanceData });
@@ -166,6 +267,28 @@ export const dbService = {
     return [...getLocalData().payments].sort((a, b) => new Date(b.datePaid).getTime() - new Date(a.datePaid).getTime());
   },
 
+  getFeePayments: async (): Promise<FeePayment[]> => {
+    if (db) {
+      try {
+        const snapshot = await getDocs(collection(db, 'feePayments'));
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeePayment));
+      } catch (e) {}
+    }
+    return getLocalData().feePayments;
+  },
+
+  addFeePayment: async (payment: Omit<FeePayment, 'id'>) => {
+    if (db) {
+      try {
+        await addDoc(collection(db, 'feePayments'), payment);
+      } catch (e) {}
+    } else {
+      const data = getLocalData();
+      data.feePayments.push({ id: generateId(), ...payment });
+      saveLocalData(data);
+    }
+  },
+
   getActivityLog: async (): Promise<SystemEvent[]> => {
     if (db) {
       try {
@@ -178,18 +301,9 @@ export const dbService = {
   },
 
   logEvent: async (type: EventType, teacherName: string, description: string, amount?: number) => {
-    const event = {
-      type,
-      teacherName,
-      description,
-      amount: amount || null,
-      timestamp: new Date().toISOString()
-    };
-    if (db) {
-      try {
-        await addDoc(collection(db, 'activityLog'), event);
-      } catch (e) {}
-    } else {
+    const event = { type, teacherName, description, amount: amount || null, timestamp: new Date().toISOString() };
+    if (db) { try { await addDoc(collection(db, 'activityLog'), event); } catch (e) {} } 
+    else {
       const data = getLocalData();
       data.activityLog.push({ id: generateId(), ...event as any });
       saveLocalData(data);
@@ -214,10 +328,7 @@ export const dbService = {
 
   updateTeacherAssignments: async (teacherId: string, assignments: TeacherAssignment[]) => {
     if (db) {
-      try {
-        const teacherRef = doc(db, 'teachers', teacherId);
-        await updateDoc(teacherRef, { assignments });
-      } catch (e) {}
+      try { await updateDoc(doc(db, 'teachers', teacherId), { assignments }); } catch (e) {}
     } else {
       const data = getLocalData();
       const idx = data.teachers.findIndex(t => t.id === teacherId);
@@ -244,11 +355,8 @@ export const dbService = {
   },
 
   deleteClass: async (id: string) => {
-    if (db) {
-      try {
-        await deleteDoc(doc(db, 'classes', id));
-      } catch (e) {}
-    } else {
+    if (db) { try { deleteDoc(doc(db, 'classes', id)); } catch (e) {} } 
+    else {
       const data = getLocalData();
       data.classes = data.classes.filter(c => c.id !== id);
       saveLocalData(data);
@@ -281,44 +389,44 @@ export const dbService = {
     const classes = await dbService.getClasses();
     const cls = classes.find(c => c.id === classId);
 
+    // If Admin adds it, it's VERIFIED. If Teacher adds it, it's SUBMITTED.
+    const newStatus = asAdmin ? AttendanceStatus.VERIFIED : AttendanceStatus.SUBMITTED;
+
     if (db) {
       try {
-        const q = query(collection(db, 'attendance'), 
-          where('teacherId', '==', teacherId), 
-          where('classId', '==', classId), 
-          where('date', '==', date)
-        );
+        const q = query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('classId', '==', classId), where('date', '==', date));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
           const attendanceDoc = snapshot.docs[0];
-          const data = attendanceDoc.data();
-          if (data.status === AttendanceStatus.PAID) throw new Error("Paid records are locked.");
+          // Prevent teachers from deleting Verified/Paid records
+          if (!asAdmin && attendanceDoc.data().status !== AttendanceStatus.SUBMITTED) {
+            throw new Error("Cannot modify verified records.");
+          }
+          if (attendanceDoc.data().status === AttendanceStatus.PAID) throw new Error("Paid records are locked.");
+          
           await deleteDoc(doc(db, 'attendance', attendanceDoc.id));
           await dbService.logEvent(EventType.ATTENDANCE_REMOVE, teacher?.name || '?', `Removed attendance for ${cls?.name} on ${date}`);
         } else {
-          await addDoc(collection(db, 'attendance'), {
-            teacherId, classId, date, 
-            status: asAdmin ? AttendanceStatus.VERIFIED : AttendanceStatus.SUBMITTED, 
-            paymentId: null, markedAt: new Date().toISOString()
-          });
+          await addDoc(collection(db, 'attendance'), { teacherId, classId, date, status: newStatus, paymentId: null, markedAt: new Date().toISOString() });
           await dbService.logEvent(EventType.ATTENDANCE_MARK, teacher?.name || '?', `Marked lecture for ${cls?.name} on ${date}`);
         }
         return;
-      } catch (e) {}
+      } catch (e) {
+        throw e;
+      }
     }
     
     const data = getLocalData();
     const idx = data.attendance.findIndex(a => a.teacherId === teacherId && a.classId === classId && a.date === date);
     if (idx !== -1) {
-      if (data.attendance[idx].status === AttendanceStatus.PAID) throw new Error("Paid records are locked.");
+      const record = data.attendance[idx];
+      if (!asAdmin && record.status !== AttendanceStatus.SUBMITTED) throw new Error("Cannot modify verified records.");
+      if (record.status === AttendanceStatus.PAID) throw new Error("Paid records are locked.");
+      
       data.attendance.splice(idx, 1);
       await dbService.logEvent(EventType.ATTENDANCE_REMOVE, teacher?.name || '?', `Removed attendance for ${cls?.name} on ${date}`);
     } else {
-      data.attendance.push({
-        id: generateId(), teacherId, classId, date, 
-        status: asAdmin ? AttendanceStatus.VERIFIED : AttendanceStatus.SUBMITTED, 
-        paymentId: null, markedAt: new Date().toISOString()
-      });
+      data.attendance.push({ id: generateId(), teacherId, classId, date, status: newStatus, paymentId: null, markedAt: new Date().toISOString() });
       await dbService.logEvent(EventType.ATTENDANCE_MARK, teacher?.name || '?', `Marked lecture for ${cls?.name} on ${date}`);
     }
     saveLocalData(data);
@@ -327,21 +435,17 @@ export const dbService = {
   verifyAttendance: async (attendanceId: string) => {
     const data = getLocalData();
     const att = data.attendance.find(a => a.id === attendanceId);
+    
+    // DB
     if (db) {
-      try {
-        const docRef = doc(db, 'attendance', attendanceId);
-        await updateDoc(docRef, { status: AttendanceStatus.VERIFIED });
+      try { 
+        await updateDoc(doc(db, 'attendance', attendanceId), { status: AttendanceStatus.VERIFIED }); 
+        // Need to fetch details for log
+        const snap = await getDocs(query(collection(db, 'teachers'))); // simplified fetch for log
       } catch (e) {}
     } else {
-      if (att) {
-        att.status = AttendanceStatus.VERIFIED;
-        saveLocalData(data);
-      }
-    }
-    if (att) {
-      const teachers = await dbService.getTeachers();
-      const teacher = teachers.find(t => t.id === att.teacherId);
-      await dbService.logEvent(EventType.ATTENDANCE_VERIFY, teacher?.name || '?', `Admin verified lecture for ${att.date}`);
+      // Local
+      if (att) { att.status = AttendanceStatus.VERIFIED; saveLocalData(data); }
     }
   },
 
@@ -367,23 +471,12 @@ export const dbService = {
 
         let runningDeductionPool = totalAdvanceDeduction;
         for (const req of paymentRequests) {
-          const q = query(collection(db, 'attendance'), 
-            where('teacherId', '==', teacherId), 
-            where('classId', '==', req.classId), 
-            where('status', '==', AttendanceStatus.VERIFIED),
-            orderBy('date', 'asc'), limit(req.lectureCount)
-          );
+          const q = query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('classId', '==', req.classId), where('status', '==', AttendanceStatus.VERIFIED), orderBy('date', 'asc'), limit(req.lectureCount));
           const snapshot = await getDocs(q);
           const paymentId = doc(collection(db, 'payments')).id;
           const deduction = Math.min(req.amount, runningDeductionPool);
           runningDeductionPool -= deduction;
-
-          batch.set(doc(db, 'payments', paymentId), {
-            teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction,
-            lectureCount: req.lectureCount, datePaid: new Date().toISOString(),
-            startDateCovered: snapshot.docs[0].data().date, endDateCovered: snapshot.docs[snapshot.docs.length - 1].data().date
-          });
-
+          batch.set(doc(db, 'payments', paymentId), { teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction, lectureCount: req.lectureCount, datePaid: new Date().toISOString(), startDateCovered: snapshot.docs[0].data().date, endDateCovered: snapshot.docs[snapshot.docs.length - 1].data().date });
           snapshot.docs.forEach(d => batch.update(d.ref, { status: AttendanceStatus.PAID, paymentId }));
           await dbService.logEvent(EventType.PAYMENT_PROCESSED, teacher.name, `Settled ₹${req.amount} for ${req.lectureCount} lectures.`, req.amount);
         }
@@ -394,31 +487,21 @@ export const dbService = {
 
     const data = getLocalData();
     let remainingToDeduct = totalAdvanceDeduction;
-    data.advances.filter(a => a.teacherId === teacherId && a.remainingAmount > 0)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .forEach(adv => {
-        if (remainingToDeduct <= 0) return;
-        const deduct = Math.min(adv.remainingAmount, remainingToDeduct);
-        adv.remainingAmount -= deduct;
-        remainingToDeduct -= deduct;
-      });
+    data.advances.filter(a => a.teacherId === teacherId && a.remainingAmount > 0).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(adv => {
+      if (remainingToDeduct <= 0) return;
+      const deduct = Math.min(adv.remainingAmount, remainingToDeduct);
+      adv.remainingAmount -= deduct;
+      remainingToDeduct -= deduct;
+    });
 
     let runningDeductionPool = totalAdvanceDeduction;
     for (const req of paymentRequests) {
-      const pending = data.attendance.filter(a => a.teacherId === teacherId && a.classId === req.classId && a.status === AttendanceStatus.VERIFIED)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        .slice(0, req.lectureCount);
-      
+      const pending = data.attendance.filter(a => a.teacherId === teacherId && a.classId === req.classId && a.status === AttendanceStatus.VERIFIED).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, req.lectureCount);
+      if (pending.length === 0) continue;
       const paymentId = generateId();
       const deduction = Math.min(req.amount, runningDeductionPool);
       runningDeductionPool -= deduction;
-
-      data.payments.push({
-        id: paymentId, teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction,
-        lectureCount: req.lectureCount, datePaid: new Date().toISOString(),
-        startDateCovered: pending[0].date, endDateCovered: pending[pending.length - 1].date
-      });
-
+      data.payments.push({ id: paymentId, teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction, lectureCount: req.lectureCount, datePaid: new Date().toISOString(), startDateCovered: pending[0].date, endDateCovered: pending[pending.length - 1].date });
       pending.forEach(p => { p.status = AttendanceStatus.PAID; p.paymentId = paymentId; });
       await dbService.logEvent(EventType.PAYMENT_PROCESSED, teacher.name, `Settled ₹${req.amount} for ${req.lectureCount} lectures.`, req.amount);
     }
@@ -428,7 +511,7 @@ export const dbService = {
   clearDatabase: async () => {
     if (db) {
       try {
-        const collections = ['teachers', 'classes', 'attendance', 'payments', 'advances', 'activityLog'];
+        const collections = ['teachers', 'classes', 'attendance', 'payments', 'advances', 'activityLog', 'students', 'feePayments', 'system_config'];
         for (const coll of collections) {
           const snapshot = await getDocs(collection(db, coll));
           const batch = writeBatch(db);
@@ -443,40 +526,11 @@ export const dbService = {
   seedDatabase: async () => {
     await dbService.clearDatabase();
     const classes = [
-      { name: 'Advanced JEE - Physics', batchSize: 28 },
-      { name: 'Calculus Master - Mathematics', batchSize: 30 },
-      { name: 'Organic Track - Chemistry', batchSize: 24 },
-      { name: 'Elite NEET - Biology', batchSize: 28 },
-      { name: 'Science Foundation - IX', batchSize: 20 },
-      { name: 'Mathematics Foundation - X', batchSize: 20 },
-      { name: 'Python Logic - Programming', batchSize: 15 },
-      { name: 'English Boards - XII Mastery', batchSize: 25 }
+      { name: 'JEE Advanced - Batch A', batchSize: 28 },
+      { name: 'JEE Mains - Batch B', batchSize: 30 }
     ];
     const classResults = await Promise.all(classes.map(c => dbService.addClass(c)));
-    const tony = await dbService.addTeacher({
-      name: 'Tony Stark', phone: '9000011111', assignments: [
-        { classId: classResults[0].id, subject: 'Quantum Mechanics', rate: 150000, activeFrom: '2025-01-01' },
-        { classId: classResults[1].id, subject: 'Advanced Calculus', rate: 120000, activeFrom: '2025-01-01' }
-      ]
-    });
-    const pepper = await dbService.addTeacher({
-      name: 'Pepper Potts', phone: '9000022222', assignments: [
-        { classId: classResults[2].id, subject: 'Biochemistry', rate: 110000, activeFrom: '2025-01-01' },
-        { classId: classResults[7].id, subject: 'Business Rhetoric', rate: 95000, activeFrom: '2025-01-01' }
-      ]
-    });
-    await dbService.addAdvance(tony.id, 40000, 'Onboarding Security Deposit (Demo)');
-    const today = new Date();
-    for (let i = 0; i < 45; i++) {
-      const date = new Date();
-      date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const isLectureDay = [1, 3, 5].includes(date.getDay());
-      if (isLectureDay) {
-        await dbService.toggleAttendance(tony.id, classResults[0].id, dateStr, true);
-        await dbService.toggleAttendance(pepper.id, classResults[2].id, dateStr, true);
-      }
-    }
-    await dbService.logEvent(EventType.TEACHER_ADD, 'SYSTEM', 'Environment Configured: Stark & Potts onboarded with verified history.');
+    await dbService.addTeacher({ name: 'Tony Stark', phone: '9000011111', assignments: [{ classId: classResults[0].id, subject: 'Quantum Mechanics', rate: 150000, activeFrom: '2025-01-01' }] });
+    await dbService.logEvent(EventType.TEACHER_ADD, 'SYSTEM', 'Demo environment initialized.');
   }
 };
