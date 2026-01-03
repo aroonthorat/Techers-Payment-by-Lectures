@@ -1,5 +1,7 @@
 {
-  "name": "Teacher Lecture Compensation System",
-  "description": "A comprehensive management system for coaching classes to track teacher attendance and manage batch-based lecture payments using a FIFO algorithm.",
-  "requestFramePermissions": []
+  "name": "EduPay Pro Android",
+  "description": "Enterprise-grade teacher compensation and student fee management system, optimized for Android devices.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

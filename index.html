@@ -3,65 +3,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Lecture Compensation System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>EduPay Pro | Android</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      /* Corporate Blue (Default) */
       --bg-main: #ffffff;
       --bg-card: #f8fafc;
       --text-main: #0f172a;
       --text-muted: #475569;
-      --primary: #2563eb;
-      --primary-light: #e0f2fe;
+      --primary: #f59e0b;
+      --primary-light: #fef3c7;
       --border: #e2e8f0;
-      --accent: #3b82f6;
+      --accent: #f59e0b;
     }
 
     [data-theme='midnight'] {
-      --bg-main: #020617;
-      --bg-card: #0f172a;
+      --bg-main: #050810;
+      --bg-card: #0a0e1a;
       --text-main: #f8fafc;
-      --text-muted: #94a3b8;
+      --text-muted: #64748b;
       --primary: #f59e0b;
-      --primary-light: #451a03;
-      --border: #1e293b;
-      --accent: #fbbf24;
-    }
-
-    [data-theme='emerald'] {
-      --bg-main: #f0fdf4;
-      --bg-card: #ffffff;
-      --text-main: #064e3b;
-      --text-muted: #065f46;
-      --primary: #059669;
-      --primary-light: #d1fae5;
-      --border: #bbf7d0;
-      --accent: #10b981;
-    }
-
-    [data-theme='crimson'] {
-      --bg-main: #fef2f2;
-      --bg-card: #ffffff;
-      --text-main: #7f1d1d;
-      --text-muted: #991b1b;
-      --primary: #dc2626;
-      --primary-light: #fee2e2;
-      --border: #fecaca;
-      --accent: #ef4444;
-    }
-
-    [data-theme='slate'] {
-      --bg-main: #f1f5f9;
-      --bg-card: #ffffff;
-      --text-main: #1e293b;
-      --text-muted: #475569;
-      --primary: #334155;
-      --primary-light: #e2e8f0;
-      --border: #cbd5e1;
-      --accent: #64748b;
+      --primary-light: #1e1b12;
+      --border: #161e2e;
+      --accent: #f59e0b;
     }
 
     body {
@@ -71,9 +40,16 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       transition: background-color 0.2s ease, color 0.2s ease;
-      overflow-x: hidden;
+      overflow: hidden;
+      height: 100%;
+      position: fixed;
+      width: 100%;
+      font-size: 14px; /* Reduced base font size */
     }
     
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    .pt-safe { padding-top: env(safe-area-inset-top); }
+
     .theme-card {
       background-color: var(--bg-card);
       border: 1px solid var(--border);
@@ -85,39 +61,33 @@
     .theme-bg-primary { background-color: var(--primary); }
     .theme-border { border-color: var(--border); }
 
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: var(--bg-main); }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 
     @keyframes slideUp {
-      from { opacity: 0; transform: translateY(8px); }
+      from { opacity: 0; transform: translateY(12px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .animate-slide-up { animation: slideUp 0.3s ease forwards; }
+    .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-    .label-header {
-      color: var(--text-muted);
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      font-size: 0.65rem;
+    .btn-active:active {
+      transform: scale(0.97);
+      opacity: 0.9;
     }
 
-    input, select {
-      background-color: var(--bg-card) !important;
-      color: var(--text-main) !important;
-      border: 1px solid var(--border) !important;
-    }
-    input:focus, select:focus {
-      border-color: var(--primary) !important;
-      outline: none;
-      box-shadow: 0 0 0 1px var(--primary);
+    .sidebar-active-btn {
+      background: linear-gradient(to right, #f59e0b, #d97706);
+      box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.2);
+      color: white !important;
     }
 
-    * {
-      text-rendering: optimizeLegibility;
-      filter: none !important;
-    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Global Compact Overrides */
+    .view-container { padding: 12px; }
+    @media (min-width: 1024px) { .view-container { padding: 40px; } }
   </style>
 <script type="importmap">
 {
@@ -134,6 +104,6 @@
 </script>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root" class="h-full w-full overflow-hidden"></div>
 </body>
 </html>

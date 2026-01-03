@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, 
   BookOpen, 
@@ -7,15 +7,17 @@ import {
   Wallet, 
   Zap, 
   Activity, 
-  Loader2, 
-  Trash2,
   RefreshCcw,
   GraduationCap,
   IndianRupee,
-  LayoutGrid,
-  Briefcase
+  Briefcase,
+  Database,
+  Cloud,
+  HardDrive,
+  Download,
+  ShieldCheck
 } from 'lucide-react';
-import { AttendanceStatus, SystemEvent, EventType } from '../types';
+import { AttendanceStatus, SystemEvent } from '../types';
 import { dbService } from '../firebase';
 
 const DashboardView: React.FC = () => {
@@ -29,8 +31,7 @@ const DashboardView: React.FC = () => {
     pendingFees: 0
   });
   const [events, setEvents] = useState<SystemEvent[]>([]);
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
+  const [dbInfo, setDbInfo] = useState({ type: 'Local', status: 'Connected' });
 
   const load = async () => {
     const [t, c, a, p, logs, s, fp] = await Promise.all([
@@ -56,164 +57,144 @@ const DashboardView: React.FC = () => {
       pendingFees: totalExpectedFee - totalCollected
     });
     setEvents(logs);
+    
+    const config = await dbService.checkAppUpdates();
+    setDbInfo({
+      type: config ? 'Cloud' : 'Offline',
+      status: 'Active'
+    });
   };
 
   useEffect(() => { load(); }, []);
 
-  const handleSeed = async () => {
-    if (stats.teacherCount > 0 && !confirm("This will replace all existing data with demo data. Proceed?")) return;
-    setIsSeeding(true);
-    try {
-      await dbService.seedDatabase();
-      await load();
-    } catch (err) {
-      alert("Seeding failed.");
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
-  const handleClear = async () => {
-    if (!confirm("Wipe all system data?")) return;
-    setIsClearing(true);
-    try {
-      await dbService.clearDatabase();
-      await load();
-    } catch (err) {
-      alert("Wipe failed.");
-    } finally {
-      setIsClearing(false);
-    }
-  };
-
-  const staffCards = [
-    { label: 'STAFF MEMBERS', value: stats.teacherCount, icon: Users, bg: 'bg-indigo-500/10', text: 'text-indigo-500', delay: 'stagger-1' },
-    { label: 'ACTIVE BATCHES', value: stats.classCount, icon: BookOpen, bg: 'bg-amber-500/10', text: 'text-amber-500', delay: 'stagger-2' },
-    { label: 'PENDING VERIFICATION', value: stats.pendingLecs, icon: Clock, bg: 'bg-rose-500/10', text: 'text-rose-500', delay: 'stagger-3' },
-    { label: 'DISBURSED SALARY', value: `₹${stats.totalPaidSalaries.toLocaleString()}`, icon: Wallet, bg: 'bg-emerald-500/10', text: 'text-emerald-500', delay: 'stagger-4' },
-  ];
-
-  const studentCards = [
-    { label: 'ENROLLED STUDENTS', value: stats.studentCount, icon: GraduationCap, bg: 'bg-cyan-500/10', text: 'text-cyan-500', delay: 'stagger-1' },
-    { label: 'FEE REVENUE', value: `₹${stats.totalRevenue.toLocaleString()}`, icon: IndianRupee, bg: 'bg-emerald-500/10', text: 'text-emerald-500', delay: 'stagger-2' },
-    { label: 'PENDING FEES', value: `₹${stats.pendingFees.toLocaleString()}`, icon: Zap, bg: 'bg-rose-500/10', text: 'text-rose-500', delay: 'stagger-3' },
-  ];
-
   return (
-    <div className="space-y-10 animate-slide-up pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="text-3xl md:text-5xl font-extrabold theme-text uppercase tracking-tighter">Command Center</h2>
-          <div className="flex items-center gap-3">
-             <div className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]"></div>
-             <span className="text-[11px] font-bold theme-text-muted uppercase tracking-widest">System Overview</span>
+    <div className="space-y-6 animate-slide-up pb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl md:text-4xl font-black theme-text uppercase tracking-tighter leading-none">Command Center</h2>
+          <div className="flex items-center gap-2 mt-1.5">
+             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+             <span className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Real-time Ecosystem Monitor</span>
           </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">
-          <button 
-            onClick={handleSeed}
-            disabled={isSeeding || isClearing}
-            className="flex items-center gap-2 bg-[var(--bg-card)] theme-text-muted px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:brightness-95 border theme-border"
-          >
-            <RefreshCcw className={`w-3.5 h-3.5 ${isSeeding ? 'animate-spin' : ''}`} />
-            RESET DEMO
-          </button>
-          <button 
-            onClick={handleClear}
-            disabled={isSeeding || isClearing}
-            className="flex items-center gap-2 bg-rose-500/10 text-rose-500 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-500/20 border border-rose-500/20"
-          >
-            {isClearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-            WIPE DATA
-          </button>
-        </div>
-      </div>
-
-      {/* Staff Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 opacity-60 ml-2">
-           <Briefcase className="w-4 h-4 theme-text" />
-           <h3 className="text-xs font-black theme-text uppercase tracking-[0.2em]">Staff & Operations</h3>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {staffCards.map((card, i) => (
-            <div key={i} className={`theme-card p-6 md:p-8 rounded-[2rem] shadow-sm border group transition-all hover:border-[var(--primary)] animate-slide-up ${card.delay}`}>
-              <div className={`w-12 h-12 md:w-14 md:h-14 mb-4 md:mb-6 ${card.bg} rounded-2xl flex items-center justify-center`}>
-                <card.icon className={`w-6 h-6 md:w-7 md:h-7 ${card.text}`} />
-              </div>
-              <div className="text-xl md:text-3xl font-black theme-text tracking-tighter leading-none">{card.value}</div>
-              <div className="text-[9px] md:text-[10px] font-black theme-text-muted uppercase tracking-widest mt-2">{card.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Student Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 opacity-60 ml-2">
-           <GraduationCap className="w-4 h-4 theme-text" />
-           <h3 className="text-xs font-black theme-text uppercase tracking-[0.2em]">Student Affairs</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          {studentCards.map((card, i) => (
-            <div key={i} className={`theme-card p-6 md:p-8 rounded-[2rem] shadow-sm border group transition-all hover:border-[var(--primary)] animate-slide-up ${card.delay}`}>
-              <div className={`w-12 h-12 md:w-14 md:h-14 mb-4 md:mb-6 ${card.bg} rounded-2xl flex items-center justify-center`}>
-                <card.icon className={`w-6 h-6 md:w-7 md:h-7 ${card.text}`} />
-              </div>
-              <div className="text-xl md:text-3xl font-black theme-text tracking-tighter leading-none">{card.value}</div>
-              <div className="text-[9px] md:text-[10px] font-black theme-text-muted uppercase tracking-widest mt-2">{card.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Activity Feed */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="theme-card rounded-[2.5rem] p-8 md:p-10 border shadow-sm animate-slide-up stagger-4">
-          <div className="flex items-center justify-between mb-10">
-            <h3 className="text-xl md:text-2xl font-extrabold theme-text uppercase tracking-tight flex items-center gap-3">
-              <Activity className="w-6 h-6 theme-primary" />
-              Activity Stream
-            </h3>
+        <div className="flex items-center gap-3 bg-[var(--bg-card)] p-1.5 rounded-xl border theme-border">
+          <div className="flex flex-col items-end pr-3 border-r theme-border">
+            <span className="text-[7px] font-black theme-text-muted uppercase tracking-widest">Engine</span>
+            <span className="text-[9px] font-black theme-text">{dbInfo.type}</span>
           </div>
-          
-          <div className="space-y-4">
-            {events.length === 0 ? (
-              <div className="py-24 text-center theme-text-muted font-bold text-[10px] uppercase tracking-[0.3em] border-2 border-dashed theme-border rounded-[2rem] opacity-40">
-                Waiting for system activity...
-              </div>
-            ) : (
-              events.slice(0, 8).map((event) => (
-                <div key={event.id} className="flex gap-4 border-b theme-border pb-4 last:border-0 last:pb-0 group hover:bg-slate-50 p-2 rounded-xl transition-colors">
-                  <div className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
-                    event.type === EventType.PAYMENT_PROCESSED ? 'bg-emerald-500' : 'theme-bg-primary'
-                  }`}></div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <div className="text-xs font-black theme-text uppercase tracking-tight">{event.teacherName}</div>
-                      <div className="text-[8px] font-black theme-text-muted uppercase opacity-40">
-                        {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    <p className="text-[10px] theme-text-muted mt-1 font-bold leading-tight">{event.description}</p>
-                  </div>
-                </div>
-              ))
-            )}
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${dbInfo.type === 'Cloud' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-slate-500/10 text-slate-500'}`}>
+             {dbInfo.type === 'Cloud' ? <Cloud className="w-4 h-4" /> : <HardDrive className="w-4 h-4" />}
           </div>
         </div>
+      </div>
 
-        <div className="theme-card rounded-[2.5rem] p-8 md:p-10 border shadow-sm flex flex-col justify-center items-center text-center animate-slide-up stagger-5">
-           <div className="w-20 h-20 bg-[var(--primary-light)] theme-primary rounded-3xl flex items-center justify-center mb-6 shadow-xl">
-             <LayoutGrid className="w-10 h-10 fill-current" />
+      <section className="space-y-4">
+        <div className="flex items-center gap-3 ml-1">
+           <Briefcase className="w-4 h-4 theme-primary" />
+           <h3 className="text-xs font-black theme-text uppercase tracking-tight">Staff Operations</h3>
+           <div className="flex-1 h-px bg-[var(--border)] opacity-20"></div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="Faculty" value={stats.teacherCount} icon={Users} color="indigo" />
+          <StatCard label="Batches" value={stats.classCount} icon={BookOpen} color="amber" />
+          <StatCard label="Pending" value={stats.pendingLecs} icon={Clock} color="rose" />
+          <StatCard label="Salaries" value={`₹${stats.totalPaidSalaries.toLocaleString()}`} icon={Wallet} color="emerald" />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center gap-3 ml-1">
+           <GraduationCap className="w-4 h-4 text-emerald-500" />
+           <h3 className="text-xs font-black theme-text uppercase tracking-tight">Student Affairs</h3>
+           <div className="flex-1 h-px bg-[var(--border)] opacity-20"></div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <StatCard label="Students" value={stats.studentCount} icon={GraduationCap} color="cyan" />
+          <StatCard label="Revenue" value={`₹${stats.totalRevenue.toLocaleString()}`} icon={IndianRupee} color="emerald" />
+          <StatCard label="Due Fees" value={`₹${stats.pendingFees.toLocaleString()}`} icon={Zap} color="rose" />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 theme-card rounded-2xl p-6 border shadow-sm flex flex-col">
+           <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black theme-text uppercase tracking-tight flex items-center gap-2">
+                <Activity className="w-4 h-4 theme-primary" />
+                Live Feed
+              </h3>
+              <button onClick={load} className="p-1.5 theme-text-muted hover:theme-text transition-all"><RefreshCcw className="w-4 h-4" /></button>
            </div>
-           <h4 className="text-2xl font-black theme-text uppercase tracking-tight mb-2">Centralized Hub</h4>
-           <p className="text-xs font-bold theme-text-muted uppercase tracking-widest max-w-xs leading-relaxed">
-             Managing compensation loads for {stats.teacherCount} faculty and tracking fees for {stats.studentCount} students.
-           </p>
+           <div className="space-y-2 max-h-[220px] overflow-y-auto no-scrollbar">
+             {events.length === 0 ? (
+               <div className="py-10 text-center opacity-20 font-black uppercase text-[9px]">Waiting for events...</div>
+             ) : (
+               events.map(ev => (
+                 <div key={ev.id} className="flex gap-3 items-start p-2.5 bg-black/5 rounded-xl border border-white/5">
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${ev.type.includes('payment') ? 'bg-emerald-500' : 'theme-bg-primary'}`}></div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className="text-[9px] font-black theme-text uppercase">{ev.teacherName}</span>
+                        <span className="text-[7px] font-bold theme-text-muted">{new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-[9px] font-bold theme-text-muted leading-tight opacity-70">{ev.description}</p>
+                    </div>
+                 </div>
+               ))
+             )}
+           </div>
+        </div>
+
+        <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col border border-white/10">
+           <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2 mb-4 relative z-10">
+             <Database className="w-4 h-4 text-[var(--primary)]" />
+             Storage Node
+           </h3>
+           <div className="space-y-3 relative z-10">
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Sync Status: Active</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                 <button onClick={() => {}} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all">
+                    <Download className="w-4 h-4 text-indigo-400" />
+                    <span className="text-[7px] font-black uppercase tracking-widest">Backup</span>
+                 </button>
+                 <button onClick={async () => { await dbService.seedDatabase(); await load(); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all">
+                    <RefreshCcw className="w-4 h-4 text-amber-400" />
+                    <span className="text-[7px] font-black uppercase tracking-widest">Reset</span>
+                 </button>
+              </div>
+              <button 
+                onClick={async () => { if(confirm("Wipe all data?")) { await dbService.clearDatabase(); await load(); } }}
+                className="w-full py-2.5 bg-rose-500/10 text-rose-500 rounded-xl border border-rose-500/20 text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all"
+              >
+                Destroy Data
+              </button>
+           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const StatCard = ({ label, value, icon: Icon, color }: any) => {
+  const colorMap: any = {
+    indigo: { bg: 'bg-indigo-500/10', text: 'text-indigo-500' },
+    amber: { bg: 'bg-amber-500/10', text: 'text-amber-500' },
+    rose: { bg: 'bg-rose-500/10', text: 'text-rose-500' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-500' },
+    cyan: { bg: 'bg-cyan-500/10', text: 'text-cyan-500' }
+  };
+  const theme = colorMap[color] || colorMap.indigo;
+
+  return (
+    <div className="theme-card p-4 rounded-2xl border shadow-sm group hover:shadow-md transition-all">
+       <div className={`w-9 h-9 ${theme.bg} ${theme.text} rounded-xl flex items-center justify-center mb-3 shadow-sm border theme-border`}>
+          <Icon className="w-4 h-4" />
+       </div>
+       <div className="text-lg font-black theme-text tracking-tighter leading-none mb-1">{value}</div>
+       <div className="text-[8px] font-black theme-text-muted uppercase tracking-widest">{label}</div>
     </div>
   );
 };
