@@ -40,7 +40,6 @@ import StudentFeesView from './views/StudentFeesView';
 type Theme = 'corporate' | 'midnight' | 'emerald' | 'crimson' | 'slate';
 
 // DEFINE CURRENT VERSION HERE
-// IMPORTANT: Increment this when building a new APK
 const CURRENT_APP_VERSION = '1.0.0';
 
 const App: React.FC = () => {
@@ -81,7 +80,6 @@ const App: React.FC = () => {
     checkUpdates();
   }, []);
 
-  // Simple semantic version comparator
   const compareVersions = (remote: string, local: string) => {
     const r = remote.split('.').map(Number);
     const l = local.split('.').map(Number);
@@ -120,31 +118,29 @@ const App: React.FC = () => {
     if (params) setNavParams(params);
   };
 
+  // --------------------------------------------------------------------------
+  // NAVIGATION STRUCTURE - DIVIDED INTO SECTIONS
+  // --------------------------------------------------------------------------
   const navStructure = useMemo(() => {
     if (authUser?.role === 'management') {
       return [
         {
-          title: 'OVERVIEW',
+          title: 'STAFF & OPERATIONS',
           items: [
             { id: 'dashboard', label: 'DASHBOARD', icon: LayoutDashboard },
             { id: 'master-calendar', label: 'MASTER PULSE', icon: Globe },
-            { id: 'classes', label: 'BATCHES', icon: BookOpen },
-          ]
-        },
-        {
-          title: 'STAFF',
-          items: [
             { id: 'teachers', label: 'FACULTY', icon: Users },
+            { id: 'classes', label: 'BATCHES', icon: BookOpen },
             { id: 'attendance', label: 'ATTENDANCE', icon: CalendarIcon },
             { id: 'payments', label: 'PAYROLL', icon: CreditCard },
             { id: 'reports', label: 'REPORTS', icon: FileText },
           ]
         },
         {
-          title: 'STUDENTS',
+          title: 'STUDENT AFFAIRS',
           items: [
             { id: 'students', label: 'DIRECTORY', icon: GraduationCap },
-            { id: 'fees', label: 'FEES', icon: IndianRupee },
+            { id: 'fees', label: 'FEE TREASURY', icon: IndianRupee },
           ]
         }
       ];
@@ -256,11 +252,14 @@ const App: React.FC = () => {
         <nav className="flex-1 p-4 space-y-6 overflow-y-auto custom-scrollbar">
           {navStructure.map((group, groupIdx) => (
             <div key={groupIdx}>
+              {/* Section Header */}
               {isSidebarOpen && (
-                <div className="px-4 mb-2 text-[10px] font-black theme-text-muted uppercase tracking-widest opacity-60">
+                <div className="px-4 mb-2 text-[10px] font-black theme-text-muted uppercase tracking-widest opacity-60 flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full theme-bg-primary"></div>
                   {group.title}
                 </div>
               )}
+              
               <div className="space-y-1">
                 {group.items.map((tab) => (
                   <button
