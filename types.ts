@@ -13,10 +13,15 @@ export enum EventType {
   RATE_CHANGE = 'rate_change',
   TEACHER_ADD = 'teacher_add',
   ADVANCE_GRANTED = 'advance_granted',
-  ADVANCE_SETTLED = 'advance_settled'
+  ADVANCE_SETTLED = 'advance_settled',
+  EXAM_CREATED = 'exam_created',
+  MARKS_SUBMITTED = 'marks_submitted'
 }
 
 export type UserRole = 'management' | 'teacher';
+export type MediumType = 'English' | 'Semi-English' | 'Urdu';
+export type ExamType = 'Unit Test' | 'Midterm' | 'Final' | 'PreBoard';
+export type ExamStatus = 'Draft' | 'Active' | 'Completed';
 
 export interface AuthUser {
   id: string;
@@ -32,6 +37,162 @@ export interface SystemEvent {
   description: string;
   amount?: number;
 }
+
+// --- Exam System Models ---
+
+export interface Exam {
+  id: string;
+  examName: string;
+  examType: ExamType;
+  academicYear: string;
+  startDate: string;
+  endDate: string;
+  class: string;
+  division: string;
+  medium: MediumType;
+  status: ExamStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Subject {
+  id: string;
+  name: string;
+  code: string;
+  mediumApplicability: MediumType[] | ['All'];
+}
+
+export interface ExamSubject {
+  id: string;
+  examId: string;
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+}
+
+export interface ExamPaper {
+  id: string;
+  examId: string;
+  subjectId: string;
+  paperName: string;
+  maxMarks: number;
+  weightage: number;
+  paperOrder: number;
+}
+
+export interface TeacherExamAssignment {
+  id: string;
+  teacherId: string;
+  examId: string;
+  subjectId: string;
+  paperId: string; // Specific paper assigned
+  class: string;
+  division: string;
+  medium: MediumType;
+  assignedAt: string;
+}
+
+export interface MarkEntry {
+  id: string;
+  examId: string;
+  subjectId: string;
+  paperId: string;
+  studentId: string;
+  studentName: string;
+  studentSeatNo: string;
+  studentRollNo?: string;
+  class: string;
+  division: string;
+  medium: MediumType;
+  maxMarks: number;
+  obtainedMarks: number | null;
+  isAbsent: boolean;
+  remarks: string;
+  teacherId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Analytics & Grading Types ---
+
+export interface GradeResult {
+  grade: 'A+' | 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D' | 'F';
+  gradePoints: number;
+  feedback: string;
+  color: string;
+  bgColor: string;
+  isPass: boolean;
+}
+
+export interface StudentPerformanceTrend {
+  studentId: string;
+  averagePercentage: number;
+  velocity: number; // % change per exam
+  trend: 'improving' | 'stable' | 'declining';
+  history: Array<{
+    examId: string;
+    examName: string;
+    date: string;
+    percentage: number;
+    grade: string;
+  }>;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+export interface ClassPerformanceMetrics {
+  examId: string;
+  classId: string;
+  averageMarks: number;
+  highestScore: number;
+  highestStudent?: string;
+  lowestScore: number;
+  passRate: number;
+  failRate: number;
+  difficultyIndex: 'Hard' | 'Moderate' | 'Easy';
+  distribution: Record<string, number>; // Marks range -> Count
+}
+
+/**
+ * Added missing ExamExportFilters type
+ */
+// Fix: examId is now optional to allow querying mark entries globally or without a pre-selected exam.
+export interface ExamExportFilters {
+  examId?: string;
+  classIds?: string[];
+  divisions?: string[];
+  mediums?: MediumType[];
+  subjectIds?: string[];
+  paperIds?: string[];
+  teacherId?: string;
+  isAbsent?: boolean;
+}
+
+/**
+ * Added missing ExportedMarkEntry type
+ */
+export interface ExportedMarkEntry extends MarkEntry {
+  percentage: number;
+  grade: string;
+  teacherName: string;
+}
+
+/**
+ * Added missing ExamAnalytics type
+ */
+export interface ExamAnalytics {
+  totalStudents: number;
+  averageMarks: number;
+  highestMarks: number;
+  highestStudent?: string;
+  lowestMarks: number;
+  passCount: number;
+  failCount: number;
+  absentCount: number;
+  gradeDistribution: Record<string, number>;
+}
+
+// --- Core Models ---
 
 export interface TeacherAssignment {
   classId: string;
@@ -95,6 +256,9 @@ export interface Enrollment {
 export interface Student {
   id: string;
   name: string;
+  seatNumber: string;
+  medium: MediumType;
+  division?: string; 
   phone: string;
   enrollments: Enrollment[];
 }
@@ -107,10 +271,9 @@ export interface FeePayment {
   notes?: string;
 }
 
-// Configuration for App Updates
 export interface AppConfig {
-  latestVersion: string; // e.g. "1.0.1"
-  downloadUrl: string;   // Link to the new APK
-  forceUpdate: boolean;  // If true, user cannot close the modal
+  latestVersion: string;
+  downloadUrl: string;
+  forceUpdate: boolean;
   releaseNotes?: string;
 }

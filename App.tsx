@@ -25,13 +25,21 @@ import {
   ChevronRight, 
   Smartphone,
   X,
-  LayoutGrid
+  LayoutGrid,
+  ClipboardCheck,
+  Award,
+  Archive,
+  BarChart3,
+  GitCompare,
+  ShieldCheck,
+  Activity
 } from 'lucide-react';
 import { AuthUser, AppConfig } from './types';
 import { dbService } from './firebase';
 
 // Views
 import DashboardView from './views/DashboardView';
+import StudentDashboardView from './views/StudentDashboardView';
 import TeachersView from './views/TeachersView';
 import StudentsView from './views/StudentsView';
 import StudentFeesView from './views/StudentFeesView';
@@ -42,9 +50,17 @@ import ReportsView from './views/ReportsView';
 import MasterCalendarView from './views/MasterCalendarView';
 import LoginView from './views/LoginView';
 import TeacherHomeView from './views/TeacherHomeView';
+import ExamManagementView from './views/ExamManagementView';
+import MarkEntryView from './views/MarkEntryView';
+import ExamExportView from './views/ExamExportView';
+import StudentPerformanceView from './views/StudentPerformanceView';
+import ComparativeAnalysisView from './views/ComparativeAnalysisView';
+import AssessmentQualityView from './views/AssessmentQualityView';
+import StudentDetailedReportView from './views/StudentDetailedReportView';
+import ProgressTrackingView from './views/ProgressTrackingView';
 
 type Theme = 'corporate' | 'midnight' | 'emerald' | 'crimson' | 'slate';
-type ManagementMode = 'staff' | 'students';
+type ManagementMode = 'staff' | 'students' | 'exams';
 
 const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
@@ -53,7 +69,12 @@ const App: React.FC = () => {
   });
   
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [managementMode, setManagementMode] = useState<ManagementMode>('students');
+  const [viewingStudentId, setViewingStudentId] = useState<string | null>(null);
+  
+  const [managementMode, setManagementMode] = useState<ManagementMode>(() => {
+    const saved = localStorage.getItem('edupay_mode');
+    return (saved as ManagementMode) || 'students';
+  });
   const [navParams, setNavParams] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>('midnight'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
@@ -61,6 +82,10 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme === 'corporate' ? '' : theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('edupay_mode', managementMode);
+  }, [managementMode]);
 
   useEffect(() => {
     if (authUser?.role === 'teacher') {
@@ -81,6 +106,7 @@ const App: React.FC = () => {
   };
 
   const handleTabClick = (id: string) => {
+    setViewingStudentId(null);
     setActiveTab(id);
     if (isSidebarOpen) setIsSidebarOpen(false);
   };
@@ -91,8 +117,9 @@ const App: React.FC = () => {
         title: 'TEACHER PORTAL',
         items: [
           { id: 'home', label: 'DASHBOARD', icon: Home },
+          { id: 'mark-entry', label: 'MARK ENTRY', icon: ClipboardCheck },
+          { id: 'performance', label: 'PERFORMANCE', icon: BarChart3 },
           { id: 'attendance', label: 'ATTENDANCE', icon: CalendarIcon },
-          { id: 'reports', label: 'PAY SLIPS', icon: FileText },
         ]
       }];
     }
@@ -101,7 +128,7 @@ const App: React.FC = () => {
       return [{
         title: 'STAFF OPERATIONS',
         items: [
-          { id: 'dashboard', label: 'OVERVIEW', icon: LayoutGrid },
+          { id: 'dashboard', label: 'STAFF HUB', icon: LayoutGrid },
           { id: 'master-calendar', label: 'MASTER PULSE', icon: Globe },
           { id: 'teachers', label: 'FACULTY', icon: Users },
           { id: 'classes', label: 'BATCHES', icon: BookOpen },
@@ -110,32 +137,57 @@ const App: React.FC = () => {
           { id: 'reports', label: 'AUDIT LOGS', icon: FileText },
         ]
       }];
-    } else {
+    } else if (managementMode === 'students') {
       return [{
         title: 'STUDENT AFFAIRS',
         items: [
-          { id: 'dashboard', label: 'OVERVIEW', icon: LayoutGrid },
+          { id: 'dashboard', label: 'STUDENT HUB', icon: LayoutGrid },
           { id: 'students', label: 'DIRECTORY', icon: GraduationCap },
+          { id: 'performance', label: 'ACADEMIC AUDIT', icon: BarChart3 },
+          { id: 'comparative', label: 'PEER VARIANCE', icon: GitCompare },
           { id: 'fees', label: 'FEE TREASURY', icon: IndianRupee },
+        ]
+      }];
+    } else {
+      return [{
+        title: 'ACADEMIC SYSTEM',
+        items: [
+          { id: 'exams', label: 'EXAM MASTER', icon: Award },
+          { id: 'progress', label: 'TRACKER', icon: Activity },
+          { id: 'mark-entry', label: 'CENTRAL MARKS', icon: ClipboardCheck },
+          { id: 'exam-export', label: 'MARK ARCHIVE', icon: Archive },
+          { id: 'quality', label: 'EXAM QUALITY', icon: ShieldCheck },
         ]
       }];
     }
   }, [authUser, managementMode]);
 
   const mobileBottomNavItems = useMemo(() => {
-    if (authUser?.role !== 'management') return navStructure[0].items;
+    if (authUser?.role !== 'management') {
+       return [
+        { id: 'home', label: 'HOME', icon: Home },
+        { id: 'mark-entry', label: 'MARKS', icon: ClipboardCheck },
+        { id: 'performance', label: 'ANALYTICS', icon: BarChart3 },
+      ];
+    }
     if (managementMode === 'students') {
       return [
-        { id: 'dashboard', label: 'OVERVIEW', icon: LayoutGrid },
-        { id: 'students', label: 'DIRECTORY', icon: GraduationCap },
-        { id: 'fees', label: 'FEE TREASURY', icon: IndianRupee },
+        { id: 'dashboard', label: 'HUB', icon: LayoutGrid },
+        { id: 'performance', label: 'AUDIT', icon: BarChart3 },
+        { id: 'fees', label: 'FEES', icon: IndianRupee },
+      ];
+    } else if (managementMode === 'staff') {
+      return [
+        { id: 'dashboard', label: 'HUB', icon: LayoutGrid },
+        { id: 'teachers', label: 'FACULTY', icon: Users },
+        { id: 'attendance', label: 'LOGS', icon: CalendarIcon },
       ];
     } else {
       return [
-        { id: 'dashboard', label: 'OVERVIEW', icon: LayoutGrid },
-        { id: 'teachers', label: 'FACULTY', icon: Users },
-        { id: 'attendance', label: 'ATTENDANCE', icon: CalendarIcon },
-      ];
+        { id: 'exams', label: 'EXAMS', icon: Award },
+        { id: 'progress', label: 'TRACKER', icon: Activity },
+        { id: 'exam-export', label: 'ARCHIVE', icon: Archive },
+      ]
     }
   }, [navStructure, authUser, managementMode]);
 
@@ -147,7 +199,7 @@ const App: React.FC = () => {
         <div className="lg:hidden fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      {/* Sidebar Drawer - Thinner & Tighter */}
+      {/* Sidebar Drawer */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-[110] h-full bg-[var(--bg-card)] border-r border-[var(--border)] 
         flex flex-col transition-all duration-300 ease-[cubic-bezier(0.33, 1, 0.68, 1)]
@@ -161,7 +213,7 @@ const App: React.FC = () => {
                 className={`flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all ${managementMode === 'staff' ? 'bg-[#0a0e1a] shadow-lg border border-white/10' : 'opacity-40 hover:opacity-100'}`}
               >
                 <Briefcase className={`w-4 h-4 ${managementMode === 'staff' ? 'text-blue-400' : 'text-slate-500'}`} />
-                <span className="text-[7px] font-black mt-1 uppercase tracking-widest text-slate-400">FACULTY</span>
+                <span className="text-[7px] font-black mt-1 uppercase tracking-widest text-slate-400">STAFF</span>
               </button>
               <button 
                 onClick={() => { setManagementMode('students'); setActiveTab('dashboard'); }}
@@ -169,6 +221,13 @@ const App: React.FC = () => {
               >
                 <GraduationCap className={`w-4 h-4 ${managementMode === 'students' ? 'text-emerald-400' : 'text-slate-500'}`} />
                 <span className="text-[7px] font-black mt-1 uppercase tracking-widest text-slate-400">STUDENTS</span>
+              </button>
+              <button 
+                onClick={() => { setManagementMode('exams'); setActiveTab('exams'); }}
+                className={`flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all ${managementMode === 'exams' ? 'bg-[#0a0e1a] shadow-lg border border-white/10' : 'opacity-40 hover:opacity-100'}`}
+              >
+                <Award className={`w-4 h-4 ${managementMode === 'exams' ? 'text-amber-400' : 'text-slate-500'}`} />
+                <span className="text-[7px] font-black mt-1 uppercase tracking-widest text-slate-400">EXAMS</span>
               </button>
             </div>
           </div>
@@ -220,42 +279,58 @@ const App: React.FC = () => {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden bg-[#050810]">
-        {/* Compact Header */}
+        {/* Header */}
         <header className="flex h-12 lg:h-16 border-b border-white/5 bg-[#0a0e1a] px-4 lg:px-10 items-center justify-between shrink-0 z-40 pt-safe">
           <div className="flex items-center gap-3">
              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-1.5 text-slate-400 hover:text-white btn-active">
                <Menu className="w-5 h-5" />
              </button>
-             <span className="hidden md:inline text-[8px] font-black text-slate-500 uppercase tracking-widest opacity-40">System /</span>
+             <span className="hidden md:inline text-[8px] font-black text-slate-500 uppercase tracking-widest opacity-40">
+               {managementMode.toUpperCase()} /
+             </span>
              <span className="text-xs font-black text-white uppercase tracking-tighter">
                 {activeTab.replace('-', ' ')}
              </span>
           </div>
           <div className="flex items-center gap-2">
-             <span className="text-[9px] font-bold text-slate-400 hidden sm:inline">{authUser.name}</span>
              <div className="w-7 h-7 rounded-lg theme-bg-primary text-white flex items-center justify-center font-bold text-xs uppercase shadow-sm">
                 {authUser.name.charAt(0)}
              </div>
           </div>
         </header>
 
-        {/* View Content - More Padding for Content */}
+        {/* View Content */}
         <main className="flex-1 overflow-y-auto no-scrollbar pb-24 lg:pb-8 pt-3 px-3 md:px-8 overscroll-none">
           <div className="max-w-7xl mx-auto w-full">
-            {activeTab === 'dashboard' && <DashboardView />}
-            {activeTab === 'teachers' && <TeachersView onNavigate={(tab, params) => { setActiveTab(tab); setNavParams(params); }} />}
-            {activeTab === 'students' && <StudentsView />}
-            {activeTab === 'fees' && <StudentFeesView />}
-            {activeTab === 'attendance' && <AttendanceView forcedTeacherId={authUser.role === 'teacher' ? authUser.id : undefined} preselectedTeacherId={navParams?.teacherId} />}
-            {activeTab === 'payments' && <PaymentsView />}
-            {activeTab === 'classes' && <ClassesView />}
-            {activeTab === 'reports' && <ReportsView forcedTeacherId={authUser.role === 'teacher' ? authUser.id : undefined} />}
-            {activeTab === 'master-calendar' && <MasterCalendarView />}
-            {activeTab === 'home' && authUser.role === 'teacher' && <TeacherHomeView user={authUser} />}
+            {viewingStudentId ? (
+              <StudentDetailedReportView studentId={viewingStudentId} onBack={() => setViewingStudentId(null)} />
+            ) : (
+              <>
+                {activeTab === 'dashboard' && (
+                  managementMode === 'staff' ? <DashboardView /> : <StudentDashboardView />
+                )}
+                {activeTab === 'teachers' && <TeachersView onNavigate={(tab, params) => { setActiveTab(tab); setNavParams(params); }} />}
+                {activeTab === 'students' && <StudentsView />}
+                {activeTab === 'fees' && <StudentFeesView />}
+                {activeTab === 'attendance' && <AttendanceView forcedTeacherId={authUser.role === 'teacher' ? authUser.id : undefined} preselectedTeacherId={navParams?.teacherId} />}
+                {activeTab === 'payments' && <PaymentsView />}
+                {activeTab === 'classes' && <ClassesView />}
+                {activeTab === 'reports' && <ReportsView forcedTeacherId={authUser.role === 'teacher' ? authUser.id : undefined} />}
+                {activeTab === 'master-calendar' && <MasterCalendarView />}
+                {activeTab === 'home' && authUser.role === 'teacher' && <TeacherHomeView user={authUser} />}
+                {activeTab === 'exams' && <ExamManagementView />}
+                {activeTab === 'progress' && <ProgressTrackingView />}
+                {activeTab === 'mark-entry' && <MarkEntryView user={authUser} />}
+                {activeTab === 'exam-export' && <ExamExportView />}
+                {activeTab === 'performance' && <StudentPerformanceView onViewStudent={(id) => setViewingStudentId(id)} />}
+                {activeTab === 'comparative' && <ComparativeAnalysisView />}
+                {activeTab === 'quality' && <AssessmentQualityView />}
+              </>
+            )}
           </div>
         </main>
 
-        {/* Compact Mobile Bottom Navigation */}
+        {/* Mobile Bottom Nav */}
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0e1a] border-t border-white/5 px-4 pt-2 pb-safe z-50 shadow-[0_-12px_30px_rgba(0,0,0,0.6)]">
           <div className="flex items-center justify-between max-w-md mx-auto">
             {mobileBottomNavItems.map((item) => (
