@@ -1,5 +1,5 @@
 
-import { initializeApp, getApps, FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, FirebaseApp, getApp } from "firebase/app";
 import { 
   getFirestore, 
   collection, 
@@ -16,7 +16,8 @@ import {
   writeBatch,
   Firestore,
   setDoc,
-  Timestamp
+  Timestamp,
+  enableIndexedDbPersistence
 } from "firebase/firestore";
 import { 
   Teacher, 
@@ -43,10 +44,13 @@ import {
 const getEnv = (key: string): string | undefined => {
   if (typeof process !== 'undefined' && process.env) {
     if (process.env[key]) return process.env[key];
+    if (process.env[`NEXT_PUBLIC_${key}`]) return process.env[`NEXT_PUBLIC_${key}`];
     if (process.env[`VITE_${key}`]) return process.env[`VITE_${key}`];
   }
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-    const env = (import.meta as any).env;
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    const env = import.meta.env;
     if (env[key]) return env[key];
     if (env[`VITE_${key}`]) return env[`VITE_${key}`];
   }
@@ -62,68 +66,60 @@ const firebaseConfig = {
   appId: getEnv('FIREBASE_APP_ID')
 };
 
-let app: FirebaseApp | null = null;
+let app: FirebaseApp;
 let db: Firestore | null = null;
 
-const isFirebaseEnabled = !!firebaseConfig.projectId && firebaseConfig.projectId !== 'undefined';
+const isFirebaseEnabled = !!firebaseConfig.projectId && firebaseConfig.projectId !== 'undefined' && firebaseConfig.apiKey;
 
 if (isFirebaseEnabled) {
   try {
-    app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
+    
+    try {
+      enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code === 'failed-precondition') {
+          console.warn("Persistence failed: Multiple tabs open");
+        } else if (err.code === 'unimplemented') {
+          console.warn("Persistence is not available in this browser");
+        }
+      });
+    } catch (e) {}
+    
   } catch (error) {
-    console.warn("Firebase Init failed, falling back to LocalStorage:", error);
+    console.error("Firebase Initialization Error:", error);
   }
 }
 
 const LOCAL_STORAGE_KEY = 'edupay_v2_db';
 
-interface LocalDB {
-  teachers: Teacher[];
-  classes: ClassType[];
-  attendance: Attendance[];
-  payments: Payment[];
-  advances: Advance[];
-  activityLog: SystemEvent[];
-  students: Student[];
-  feePayments: FeePayment[];
-  exams: Exam[];
-  examSubjects: ExamSubject[];
-  examPapers: ExamPaper[];
-  markEntries: MarkEntry[];
-  teacherExamAssignments: TeacherExamAssignment[];
-  subjects: Subject[];
-}
-
-const getLocalData = (): LocalDB => {
+const getLocalData = () => {
   const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (!data) return { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [], students: [], feePayments: [], exams: [], examSubjects: [], examPapers: [], markEntries: [], teacherExamAssignments: [], subjects: [] };
-  try { 
-    const parsed = JSON.parse(data);
-    return {
-      teachers: parsed.teachers || [],
-      classes: parsed.classes || [],
-      attendance: parsed.attendance || [],
-      payments: parsed.payments || [],
-      advances: parsed.advances || [],
-      activityLog: parsed.activityLog || [],
-      students: parsed.students || [],
-      feePayments: parsed.feePayments || [],
-      exams: parsed.exams || [],
-      examSubjects: parsed.examSubjects || [],
-      examPapers: parsed.examPapers || [],
-      markEntries: parsed.markEntries || [],
-      teacherExamAssignments: parsed.teacherExamAssignments || [],
-      subjects: parsed.subjects || []
-    };
-  } catch (e) { return { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [], students: [], feePayments: [], exams: [], examSubjects: [], examPapers: [], markEntries: [], teacherExamAssignments: [], subjects: [] }; }
+  const empty = { teachers: [], classes: [], attendance: [], payments: [], advances: [], activityLog: [], students: [], feePayments: [], exams: [], examSubjects: [], examPapers: [], markEntries: [], teacherExamAssignments: [], subjects: [] };
+  if (!data) return empty;
+  try { return { ...empty, ...JSON.parse(data) }; } catch (e) { return empty; }
 };
 
-const saveLocalData = (data: LocalDB) => { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data)); };
+const saveLocalData = (data: any) => { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data)); };
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export const dbService = {
-  // --- Exam Management ---
+  isOnline: () => !!db,
+
+  migrateToCloud: async () => {
+    if (!db) throw new Error("Connect Firebase first to migrate.");
+    const local = getLocalData();
+    const collections = Object.keys(local);
+    
+    for (const col of collections) {
+      const items = local[col];
+      for (const item of items) {
+        const { id, ...data } = item;
+        await setDoc(doc(db, col, id || generateId()), data);
+      }
+    }
+  },
+
   getExams: async (): Promise<Exam[]> => {
     if (db) {
       const snap = await getDocs(collection(db, 'exams'));
@@ -158,7 +154,7 @@ export const dbService = {
       const snap = await getDocs(q);
       return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamSubject));
     }
-    return getLocalData().examSubjects.filter(es => es.examId === examId);
+    return getLocalData().examSubjects.filter((es: any) => es.examId === examId);
   },
 
   getExamPapers: async (examId: string): Promise<ExamPaper[]> => {
@@ -167,7 +163,7 @@ export const dbService = {
       const snap = await getDocs(q);
       return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamPaper));
     }
-    return getLocalData().examPapers.filter(ep => ep.examId === examId).sort((a,b) => a.paperOrder - b.paperOrder);
+    return getLocalData().examPapers.filter((ep: any) => ep.examId === examId).sort((a: any, b: any) => a.paperOrder - b.paperOrder);
   },
 
   addExamPaper: async (paper: Omit<ExamPaper, 'id'>) => {
@@ -187,7 +183,7 @@ export const dbService = {
       return snap.docs.map(d => ({ id: d.id, ...d.data() } as TeacherExamAssignment));
     }
     let res = getLocalData().teacherExamAssignments;
-    if (teacherId) res = res.filter(a => a.teacherId === teacherId);
+    if (teacherId) res = res.filter((a: any) => a.teacherId === teacherId);
     return res;
   },
 
@@ -197,8 +193,6 @@ export const dbService = {
     data.teacherExamAssignments.push({ id: generateId(), ...assignment });
     saveLocalData(data);
   },
-
-  // --- Mark Entry System ---
 
   getMarkEntries: async (filters: { examId: string, subjectId: string, paperId: string, teacherId?: string }) => {
     if (db) {
@@ -212,7 +206,7 @@ export const dbService = {
       const snap = await getDocs(q);
       return snap.docs.map(d => ({ id: d.id, ...d.data() } as MarkEntry));
     }
-    return getLocalData().markEntries.filter(m => 
+    return getLocalData().markEntries.filter((m: any) => 
       m.examId === filters.examId && 
       m.subjectId === filters.subjectId && 
       m.paperId === filters.paperId &&
@@ -224,10 +218,8 @@ export const dbService = {
     if (db) {
       let q = collection(db, 'markEntries') as any;
       if (f.examId) q = query(q, where('examId', '==', f.examId));
-      
       const snap = await getDocs(q);
       let data = snap.docs.map(d => ({ id: d.id, ...d.data() } as MarkEntry));
-      
       return data.filter(m => {
         if (f.classIds && !f.classIds.includes(m.class)) return false;
         if (f.divisions && !f.divisions.includes(m.division)) return false;
@@ -239,9 +231,8 @@ export const dbService = {
         return true;
       });
     }
-    
     let res = getLocalData().markEntries;
-    return res.filter(m => {
+    return res.filter((m: any) => {
       if (f.examId && m.examId !== f.examId) return false;
       if (f.classIds && !f.classIds.includes(m.class)) return false;
       if (f.divisions && !f.divisions.includes(m.division)) return false;
@@ -266,7 +257,7 @@ export const dbService = {
     }
     const data = getLocalData();
     entries.forEach(e => {
-      const idx = data.markEntries.findIndex(me => me.id === e.id);
+      const idx = data.markEntries.findIndex((me: any) => me.id === e.id);
       if (idx !== -1) data.markEntries[idx] = { ...e, updatedAt: new Date().toISOString() };
       else data.markEntries.push(e);
     });
@@ -277,52 +268,32 @@ export const dbService = {
     const exams = await dbService.getExams();
     const exam = exams.find(e => e.id === examId);
     if (!exam) return;
-
     const [students, papers, assignments] = await Promise.all([
       dbService.getStudents(),
       dbService.getExamPapers(examId),
       dbService.getTeacherExamAssignments()
     ]);
-
     const eligibleStudents = students.filter(s => 
-      s.enrollments.some(enr => enr.classId === exam.class) && 
-      s.medium === exam.medium
+      s.enrollments.some(enr => enr.classId === exam.class) && s.medium === exam.medium
     );
-
     const batch: MarkEntry[] = [];
-    
     for (const student of eligibleStudents) {
       for (const paper of papers) {
         const assignment = assignments.find(a => 
-          a.examId === examId && 
-          a.paperId === paper.id && 
-          a.medium === student.medium &&
-          a.class === exam.class
+          a.examId === examId && a.paperId === paper.id && a.medium === student.medium && a.class === exam.class
         );
-
         const entry: MarkEntry = {
           id: db ? doc(collection(db, 'markEntries')).id : generateId(),
-          examId,
-          subjectId: paper.subjectId,
-          paperId: paper.id,
-          studentId: student.id,
-          studentName: student.name,
-          studentSeatNo: student.seatNumber,
-          class: exam.class,
-          division: student.division || 'A',
-          medium: student.medium,
-          maxMarks: paper.maxMarks,
-          obtainedMarks: null,
-          isAbsent: false,
-          remarks: '',
+          examId, subjectId: paper.subjectId, paperId: paper.id,
+          studentId: student.id, studentName: student.name, studentSeatNo: student.seatNumber,
+          class: exam.class, division: student.division || 'A', medium: student.medium,
+          maxMarks: paper.maxMarks, obtainedMarks: null, isAbsent: false, remarks: '',
           teacherId: assignment?.teacherId || 'UNASSIGNED',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         };
         batch.push(entry);
       }
     }
-
     if (db) {
       const fbBatch = writeBatch(db);
       batch.forEach(e => fbBatch.set(doc(db!, 'markEntries', e.id), e));
@@ -334,7 +305,6 @@ export const dbService = {
     }
   },
 
-  // --- Core Services ---
   checkAppUpdates: async (): Promise<AppConfig | null> => {
     if (!db) return null;
     try {
@@ -390,7 +360,7 @@ export const dbService = {
     }
     const data = getLocalData();
     let res = data.advances;
-    if (teacherId) res = res.filter(a => a.teacherId === teacherId);
+    if (teacherId) res = res.filter((a: any) => a.teacherId === teacherId);
     return [...res].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   },
 
@@ -470,7 +440,7 @@ export const dbService = {
     if (db) await updateDoc(doc(db, 'teachers', teacherId), { assignments });
     else {
       const data = getLocalData();
-      const idx = data.teachers.findIndex(t => t.id === teacherId);
+      const idx = data.teachers.findIndex((t: any) => t.id === teacherId);
       if (idx !== -1) data.teachers[idx].assignments = assignments;
       saveLocalData(data);
     }
@@ -492,7 +462,7 @@ export const dbService = {
     if (db) deleteDoc(doc(db, 'classes', id));
     else {
       const data = getLocalData();
-      data.classes = data.classes.filter(c => c.id !== id);
+      data.classes = data.classes.filter((c: any) => c.id !== id);
       saveLocalData(data);
     }
   },
@@ -507,8 +477,8 @@ export const dbService = {
     }
     const data = getLocalData();
     let res = data.attendance;
-    if (teacherId) res = res.filter(a => a.teacherId === teacherId);
-    if (classId) res = res.filter(a => a.classId === classId);
+    if (teacherId) res = res.filter((a: any) => a.teacherId === teacherId);
+    if (classId) res = res.filter((a: any) => a.classId === classId);
     return [...res].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   },
 
@@ -518,7 +488,6 @@ export const dbService = {
     const classes = await dbService.getClasses();
     const cls = classes.find(c => c.id === classId);
     const newStatus = asAdmin ? AttendanceStatus.VERIFIED : AttendanceStatus.SUBMITTED;
-
     if (db) {
       const q = query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('classId', '==', classId), where('date', '==', date));
       const snapshot = await getDocs(q);
@@ -535,7 +504,7 @@ export const dbService = {
       return;
     }
     const data = getLocalData();
-    const idx = data.attendance.findIndex(a => a.teacherId === teacherId && a.classId === classId && a.date === date);
+    const idx = data.attendance.findIndex((a: any) => a.teacherId === teacherId && a.classId === classId && a.date === date);
     if (idx !== -1) {
       const record = data.attendance[idx];
       if (!asAdmin && record.status !== AttendanceStatus.SUBMITTED) throw new Error("Cannot modify verified records.");
@@ -551,7 +520,7 @@ export const dbService = {
     if (db) await updateDoc(doc(db, 'attendance', attendanceId), { status: AttendanceStatus.VERIFIED });
     else {
       const data = getLocalData();
-      const att = data.attendance.find(a => a.id === attendanceId);
+      const att = data.attendance.find((a: any) => a.id === attendanceId);
       if (att) { att.status = AttendanceStatus.VERIFIED; saveLocalData(data); }
     }
   },
@@ -588,7 +557,7 @@ export const dbService = {
     }
     const data = getLocalData();
     let remainingToDeduct = totalAdvanceDeduction;
-    data.advances.filter(a => a.teacherId === teacherId && a.remainingAmount > 0).forEach(adv => {
+    data.advances.filter((a: any) => a.teacherId === teacherId && a.remainingAmount > 0).forEach((adv: any) => {
       if (remainingToDeduct <= 0) return;
       const deduct = Math.min(adv.remainingAmount, remainingToDeduct);
       adv.remainingAmount -= deduct;
@@ -596,12 +565,12 @@ export const dbService = {
     });
     let runningDeductionPool = totalAdvanceDeduction;
     for (const req of paymentRequests) {
-      const pending = data.attendance.filter(a => a.teacherId === teacherId && a.classId === req.classId && a.status === AttendanceStatus.VERIFIED).slice(0, req.lectureCount);
+      const pending = data.attendance.filter((a: any) => a.teacherId === teacherId && a.classId === req.classId && a.status === AttendanceStatus.VERIFIED).slice(0, req.lectureCount);
       const paymentId = generateId();
       const deduction = Math.min(req.amount, runningDeductionPool);
       runningDeductionPool -= deduction;
       data.payments.push({ id: paymentId, teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction, lectureCount: req.lectureCount, datePaid: new Date().toISOString(), startDateCovered: pending[0].date, endDateCovered: pending[pending.length-1].date });
-      pending.forEach(p => { p.status = AttendanceStatus.PAID; p.paymentId = paymentId; });
+      pending.forEach((p: any) => { p.status = AttendanceStatus.PAID; p.paymentId = paymentId; });
     }
     saveLocalData(data);
   },
@@ -621,54 +590,110 @@ export const dbService = {
 
   seedDatabase: async () => {
     await dbService.clearDatabase();
-    const classResults = await Promise.all([
-      dbService.addClass({ name: 'JEE Advanced - English', batchSize: 28 }),
-      dbService.addClass({ name: 'JEE Advanced - Semi-English', batchSize: 30 })
-    ]);
-    await dbService.addStudent({
-      name: 'AAMENA BEGUM SHAIKH ANWAR',
-      seatNumber: 'U2026001',
-      medium: 'English',
-      division: 'A',
-      phone: '0000000000',
-      enrollments: [{ classId: classResults[0].id, totalFee: 30000, enrolledAt: '2025-01-01' }]
-    });
-    const teacher = await dbService.addTeacher({ name: 'Tony Stark', phone: '9000011111', assignments: [{ classId: classResults[0].id, subject: 'Quantum Mechanics', rate: 150000, activeFrom: '2025-01-01' }] });
     
+    // 1. Create Core Batches
+    const c1 = await dbService.addClass({ name: '12th SCIENCE - MH BOARD', batchSize: 28 });
+    const c2 = await dbService.addClass({ name: '11th SCIENCE - MH BOARD', batchSize: 30 });
+    const c3 = await dbService.addClass({ name: 'NEET REPEATER BATCH', batchSize: 24 });
+    const c4 = await dbService.addClass({ name: 'JEE INTENSIVE 2026', batchSize: 32 });
+    
+    // 2. Create Faculty Members (Teachers)
+    const t1 = await dbService.addTeacher({ 
+      name: 'PROF. KHAN ARSHAD', 
+      phone: '9822001122', 
+      assignments: [
+        { classId: c1.id, subject: 'Physics', rate: 120000, activeFrom: '2025-01-01' },
+        { classId: c2.id, subject: 'Mathematics', rate: 100000, activeFrom: '2025-01-01' }
+      ] 
+    });
+    
+    const t2 = await dbService.addTeacher({ 
+      name: 'DR. SNEHA DESHMUKH', 
+      phone: '9911223344', 
+      assignments: [
+        { classId: c1.id, subject: 'Biology', rate: 85000, activeFrom: '2025-01-01' },
+        { classId: c3.id, subject: 'Botany', rate: 90000, activeFrom: '2025-01-01' }
+      ] 
+    });
+
+    const t3 = await dbService.addTeacher({ 
+      name: 'PROF. AMIT VERMA', 
+      phone: '9001122334', 
+      assignments: [
+        { classId: c4.id, subject: 'Chemistry', rate: 110000, activeFrom: '2025-01-01' },
+        { classId: c1.id, subject: 'Organic Chemistry', rate: 95000, activeFrom: '2025-01-01' }
+      ] 
+    });
+
+    // 3. Create Student Directory
+    const s1 = await dbService.addStudent({
+      name: 'SHAIKH ARMAAN JAVEED', seatNumber: 'U2026001', medium: 'English', division: 'A', phone: '9000100010',
+      enrollments: [{ classId: c1.id, totalFee: 45000, enrolledAt: '2025-01-05' }]
+    });
+
+    const s2 = await dbService.addStudent({
+      name: 'SYED AMAN ALI', seatNumber: 'U2026002', medium: 'Urdu', division: 'B', phone: '9000100011',
+      enrollments: [{ classId: c2.id, totalFee: 32000, enrolledAt: '2025-01-07' }]
+    });
+
+    const s3 = await dbService.addStudent({
+      name: 'KULKARNI ADITYA RAVI', seatNumber: 'U2026003', medium: 'Semi-English', division: 'A', phone: '9000100012',
+      enrollments: [{ classId: c3.id, totalFee: 55000, enrolledAt: '2025-01-10' }]
+    });
+
+    const s4 = await dbService.addStudent({
+      name: 'PATEL RIYA SURESH', seatNumber: 'U2026004', medium: 'English', division: 'C', phone: '9000100013',
+      enrollments: [{ classId: c4.id, totalFee: 65000, enrolledAt: '2025-01-12' }]
+    });
+
+    const s5 = await dbService.addStudent({
+      name: 'GAIKWAD OMKAR VINAYAK', seatNumber: 'U2026005', medium: 'Semi-English', division: 'A', phone: '9000100014',
+      enrollments: [{ classId: c1.id, totalFee: 42000, enrolledAt: '2025-01-15' }]
+    });
+
+    // 4. Record Initial Fee Collections
+    await dbService.addFeePayment({ studentId: s1.id, amount: 20000, date: '2025-01-15', notes: 'First Installment - Cheque' });
+    await dbService.addFeePayment({ studentId: s2.id, amount: 5000, date: '2025-01-20', notes: 'Registration Fee' });
+    await dbService.addFeePayment({ studentId: s4.id, amount: 35000, date: '2025-01-22', notes: 'Online Transfer' });
+
+    // 5. Generate Sample Attendance (Historical & Pending)
+    const today = new Date();
+    const dates = [
+      new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      today.toISOString().split('T')[0]
+    ];
+
+    // Verified & Ready for Payment
+    await dbService.toggleAttendance(t1.id, c1.id, dates[0], true);
+    await dbService.toggleAttendance(t2.id, c1.id, dates[0], true);
+    
+    // Submitted & Pending Review
+    await dbService.toggleAttendance(t1.id, c2.id, dates[1], false);
+    await dbService.toggleAttendance(t3.id, c4.id, dates[1], false);
+    await dbService.toggleAttendance(t2.id, c3.id, dates[2], false);
+
+    // 6. Log System Events
+    await dbService.logEvent(EventType.TEACHER_ADD, 'SYSTEM', 'Initialized Comprehensive Trial Database');
+    
+    // 7. Academic Assessment Structure
     const exam = await dbService.addExam({
-      examName: 'Midterm 2025',
-      examType: 'Midterm',
-      academicYear: '2025',
-      startDate: '2025-06-01',
-      endDate: '2025-06-15',
-      class: classResults[0].id,
-      division: 'A',
-      medium: 'English',
-      status: 'Active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      examName: 'UNIT EVALUATION - I', examType: 'Unit Test', academicYear: '2025-26',
+      startDate: '2025-07-01', endDate: '2025-07-07', class: c1.id,
+      division: 'A', medium: 'English', status: 'Active',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
 
     const paper = await dbService.addExamPaper({
-      examId: exam.id,
-      subjectId: 'QM-101',
-      paperName: 'Theory',
-      maxMarks: 100,
-      weightage: 100,
-      paperOrder: 1
+      examId: exam.id, subjectId: 'PHY-101', paperName: 'Basic Mechanics', maxMarks: 50, weightage: 100, paperOrder: 1
     });
 
     await dbService.assignTeacherToExam({
-      teacherId: teacher.id,
-      examId: exam.id,
-      subjectId: 'QM-101',
-      paperId: paper!.id,
-      class: classResults[0].id,
-      division: 'A',
-      medium: 'English',
-      assignedAt: new Date().toISOString()
+      teacherId: t1.id, examId: exam.id, subjectId: 'PHY-101', paperId: paper!.id,
+      class: c1.id, division: 'A', medium: 'English', assignedAt: new Date().toISOString()
     });
 
+    // Initialize individual marksheets for the exam
     await dbService.initializeMarkEntries(exam.id);
   }
 };

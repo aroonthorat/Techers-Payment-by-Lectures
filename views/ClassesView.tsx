@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, BookOpen } from 'lucide-react';
+import { Plus, BookOpen } from 'lucide-react';
 import { ClassType } from '../types';
 import { dbService } from '../firebase';
 
@@ -25,13 +24,6 @@ const ClassesView: React.FC = () => {
     setFormData({ name: '', batchSize: 28 });
     setShowAdd(false);
     loadData();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this class?")) {
-      await dbService.deleteClass(id);
-      loadData();
-    }
   };
 
   return (
@@ -92,12 +84,6 @@ const ClassesView: React.FC = () => {
                 <div className="w-14 h-14 bg-[var(--primary-light)] theme-primary rounded-2xl flex items-center justify-center">
                   <BookOpen className="w-7 h-7" />
                 </div>
-                <button 
-                  onClick={() => handleDelete(cls.id)}
-                  className="theme-text-muted hover:text-rose-500 p-2 rounded-lg hover:bg-rose-500/10 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
               <h3 className="text-xl font-black theme-text mb-2 uppercase tracking-tighter">{cls.name}</h3>
               <div className="flex items-center gap-2 bg-[var(--bg-main)] px-4 py-2 rounded-xl border theme-border w-fit">

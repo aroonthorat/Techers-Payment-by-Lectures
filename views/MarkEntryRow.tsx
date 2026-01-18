@@ -2,6 +2,7 @@
 import React from 'react';
 import { User, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { MarkEntry } from '../types';
+import { NativeBridge } from '../utils/NativeBridge';
 
 interface MarkEntryRowProps {
   entry: MarkEntry;
@@ -20,6 +21,11 @@ const MarkEntryRow: React.FC<MarkEntryRowProps> = React.memo(({
 }) => {
   const isInvalid = entry.obtainedMarks !== null && entry.obtainedMarks > entry.maxMarks;
   const isCompleted = entry.obtainedMarks !== null || entry.isAbsent;
+
+  const handleAbsentToggle = () => {
+    NativeBridge.hapticFeedback('impact');
+    onUpdate(entry.id, { isAbsent: !entry.isAbsent });
+  };
 
   return (
     <tr className={`group transition-colors ${
@@ -55,11 +61,11 @@ const MarkEntryRow: React.FC<MarkEntryRowProps> = React.memo(({
         <button 
           tabIndex={0}
           aria-label={`Mark ${entry.studentName} as absent`}
-          onClick={() => onUpdate(entry.id, { isAbsent: !entry.isAbsent })}
+          onClick={handleAbsentToggle}
           onKeyDown={(e) => {
             if (e.key === ' ' || e.key === 'Enter') {
               e.preventDefault();
-              onUpdate(entry.id, { isAbsent: !entry.isAbsent });
+              handleAbsentToggle();
             }
           }}
           className={`w-10 h-6 rounded-full transition-all relative border outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-[var(--bg-card)] ${
@@ -79,7 +85,9 @@ const MarkEntryRow: React.FC<MarkEntryRowProps> = React.memo(({
               type="number"
               disabled={entry.isAbsent}
               value={entry.obtainedMarks === null ? '' : entry.obtainedMarks}
-              onChange={(e) => onUpdate(entry.id, { obtainedMarks: e.target.value === '' ? null : Number(e.target.value) })}
+              onChange={(e) => {
+                onUpdate(entry.id, { obtainedMarks: e.target.value === '' ? null : Number(e.target.value) });
+              }}
               onKeyDown={(e) => onKeyDown(e, index)}
               className={`w-20 bg-[var(--bg-main)] border-2 rounded-xl px-3 py-2.5 text-center text-sm font-black transition-all outline-none ${
                 entry.isAbsent ? 'border-transparent text-slate-800' :

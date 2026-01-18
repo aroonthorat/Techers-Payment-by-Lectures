@@ -11,23 +11,25 @@ import {
   AlertCircle,
   Loader2,
   ClipboardCheck,
-  RefreshCcw
+  RefreshCcw,
+  BookOpen
 } from 'lucide-react';
 import { useExamExport } from '../hooks/useExamExport';
 import { dbService } from '../firebase';
 import { Exam, ClassType, Teacher, ExamExportFilters } from '../types';
 import ExamExportFiltersSidebar from './ExamExportFilters';
 import ExamAnalyticsDashboard from './ExamAnalyticsDashboard';
-import { generateCSV, generateJSON } from '../utils/exportHelpers';
+import { generateCSV, generateJSON, generateAttendanceSheet } from '../utils/exportHelpers';
 
 const ExamExportView: React.FC = () => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [classes, setClasses] = useState<ClassType[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isReady, setIsReady] = useState(false);
+  const [currentFilters, setCurrentFilters] = useState<ExamExportFilters | null>(null);
   
   const { entries, loading, fetchFilteredData, analytics } = useExamExport();
-  const [exportFormat, setExportFormat] = useState<'csv' | 'json' | 'pdf'>('csv');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json' | 'pdf' | 'attendance'>('csv');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
@@ -45,6 +47,7 @@ const ExamExportView: React.FC = () => {
   }, []);
 
   const handleApplyFilters = (f: ExamExportFilters) => {
+    setCurrentFilters(f);
     fetchFilteredData(f, teachers);
     setCurrentPage(1);
   };
@@ -57,9 +60,23 @@ const ExamExportView: React.FC = () => {
   const handleDownload = () => {
     if (entries.length === 0) return;
     const filename = `EDU_MARK_REPORT_${new Date().toISOString().split('T')[0]}.csv`;
-    if (exportFormat === 'csv') generateCSV(entries, filename);
-    else if (exportFormat === 'json') generateJSON(entries, filename.replace('.csv', '.json'));
-    else window.print();
+    
+    if (exportFormat === 'csv') {
+      generateCSV(entries, filename);
+    } else if (exportFormat === 'json') {
+      generateJSON(entries, filename.replace('.csv', '.json'));
+    } else if (exportFormat === 'attendance') {
+      const activeExam = exams.find(ex => ex.id === currentFilters?.examId);
+      const activeClass = classes.find(cl => cl.id === activeExam?.class);
+      generateAttendanceSheet(entries, {
+        examName: activeExam?.examName || 'UNSPECIFIED EXAM',
+        subjectName: 'GENERAL',
+        date: activeExam?.startDate || new Date().toLocaleDateString(),
+        className: activeClass?.name || 'GENERAL BATCH'
+      });
+    } else {
+      window.print();
+    }
   };
 
   if (!isReady) {
@@ -98,14 +115,14 @@ const ExamExportView: React.FC = () => {
             </p>
           </div>
           
-          <div className="flex items-center gap-3 bg-[#0a0e1a] p-1.5 rounded-2xl border border-white/5">
-             {(['csv', 'json', 'pdf'] as const).map(fmt => (
+          <div className="flex items-center gap-2 bg-[#0a0e1a] p-1.5 rounded-2xl border border-white/5 overflow-x-auto no-scrollbar max-w-full">
+             {(['csv', 'json', 'pdf', 'attendance'] as const).map(fmt => (
                 <button 
                   key={fmt}
                   onClick={() => setExportFormat(fmt)}
-                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${exportFormat === fmt ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                  className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${exportFormat === fmt ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
                 >
-                  {fmt}
+                  {fmt === 'attendance' ? 'Attendance Sheet' : fmt}
                 </button>
              ))}
           </div>
@@ -210,8 +227,8 @@ const ExamExportView: React.FC = () => {
                onClick={handleDownload}
                className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.25em] shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-emerald-900/20"
              >
-                {exportFormat === 'pdf' ? <Printer className="w-5 h-5" /> : <Download className="w-5 h-5" />}
-                {exportFormat === 'pdf' ? 'Initiate Print Protocol' : `Extract ${exportFormat.toUpperCase()} Snapshot`}
+                {exportFormat === 'pdf' ? <Printer className="w-5 h-5" /> : exportFormat === 'attendance' ? <BookOpen className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+                {exportFormat === 'pdf' ? 'Initiate Print Protocol' : exportFormat === 'attendance' ? 'Generate Class Attendance' : `Extract ${exportFormat.toUpperCase()} Snapshot`}
              </button>
           </div>
         )}

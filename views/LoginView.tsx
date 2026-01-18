@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, UserCircle2, Briefcase, ChevronRight, Loader2, BookOpen, Sparkles } from 'lucide-react';
 import { AuthUser, Teacher, UserRole } from '../types';
 import { dbService } from '../firebase';
+import { NativeBridge } from '../utils/NativeBridge';
 
 interface LoginViewProps {
   onLogin: (user: AuthUser) => void;
@@ -24,14 +25,23 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
   const handleLogin = async () => {
     setIsLoading(true);
+    NativeBridge.hapticFeedback('impact');
     await new Promise(r => setTimeout(r, 800));
+    
+    let user: AuthUser | null = null;
+    
     if (role === 'management') {
-      onLogin({ id: 'admin', name: 'Administrator', role: 'management' });
+      user = { id: 'admin', name: 'Administrator', role: 'management' };
     } else if (role === 'teacher' && selectedTeacherId) {
       const teacher = teachers.find(t => t.id === selectedTeacherId);
       if (teacher) {
-        onLogin({ id: teacher.id, name: teacher.name, role: 'teacher' });
+        user = { id: teacher.id, name: teacher.name, role: 'teacher' };
       }
+    }
+
+    if (user) {
+      await NativeBridge.showToast(`Authenticated as ${user.name}`);
+      onLogin(user);
     }
     setIsLoading(false);
   };
@@ -57,7 +67,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
           <div className="grid grid-cols-1 gap-4 mb-8">
             <button 
-              onClick={() => { setRole('management'); setSelectedTeacherId(''); }}
+              onClick={() => { setRole('management'); setSelectedTeacherId(''); NativeBridge.hapticFeedback('selection'); }}
               className={`flex items-center gap-5 p-6 rounded-[2rem] border-2 transition-all group ${role === 'management' ? 'border-[var(--primary)] bg-[var(--primary-light)]/20' : 'theme-border bg-[var(--bg-main)] hover:brightness-110'}`}
             >
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${role === 'management' ? 'theme-bg-primary text-white' : 'bg-[var(--bg-card)] theme-text-muted group-hover:theme-primary'}`}>
@@ -71,7 +81,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             </button>
 
             <button 
-              onClick={() => setRole('teacher')}
+              onClick={() => { setRole('teacher'); NativeBridge.hapticFeedback('selection'); }}
               className={`flex items-center gap-5 p-6 rounded-[2rem] border-2 transition-all group ${role === 'teacher' ? 'border-[var(--primary)] bg-[var(--primary-light)]/20' : 'theme-border bg-[var(--bg-main)] hover:brightness-110'}`}
             >
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${role === 'teacher' ? 'theme-bg-primary text-white' : 'bg-[var(--bg-card)] theme-text-muted group-hover:theme-primary'}`}>
@@ -90,7 +100,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               <label className="text-[10px] font-black theme-text-muted uppercase tracking-widest ml-1 mb-2 block">Choose Your Profile</label>
               <select 
                 value={selectedTeacherId}
-                onChange={e => setSelectedTeacherId(e.target.value)}
+                onChange={e => { setSelectedTeacherId(e.target.value); NativeBridge.hapticFeedback('selection'); }}
                 className="w-full theme-card rounded-2xl px-6 py-4 text-sm font-black theme-text focus:outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer"
               >
                 <option value="">Choose Profile...</option>

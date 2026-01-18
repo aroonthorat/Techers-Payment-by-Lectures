@@ -58,9 +58,10 @@ import ComparativeAnalysisView from './views/ComparativeAnalysisView';
 import AssessmentQualityView from './views/AssessmentQualityView';
 import StudentDetailedReportView from './views/StudentDetailedReportView';
 import ProgressTrackingView from './views/ProgressTrackingView';
+import SettingsView from './views/SettingsView';
 
 type Theme = 'corporate' | 'midnight' | 'emerald' | 'crimson' | 'slate';
-type ManagementMode = 'staff' | 'students' | 'exams';
+type ManagementMode = 'staff' | 'students' | 'exams' | 'system';
 
 const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
@@ -148,7 +149,7 @@ const App: React.FC = () => {
           { id: 'fees', label: 'FEE TREASURY', icon: IndianRupee },
         ]
       }];
-    } else {
+    } else if (managementMode === 'exams') {
       return [{
         title: 'ACADEMIC SYSTEM',
         items: [
@@ -157,6 +158,14 @@ const App: React.FC = () => {
           { id: 'mark-entry', label: 'CENTRAL MARKS', icon: ClipboardCheck },
           { id: 'exam-export', label: 'MARK ARCHIVE', icon: Archive },
           { id: 'quality', label: 'EXAM QUALITY', icon: ShieldCheck },
+        ]
+      }];
+    } else {
+      return [{
+        title: 'INSTITUTIONAL CORE',
+        items: [
+          { id: 'dashboard', label: 'CONSOLE', icon: LayoutDashboard },
+          { id: 'settings', label: 'MAINTENANCE', icon: Settings },
         ]
       }];
     }
@@ -182,11 +191,16 @@ const App: React.FC = () => {
         { id: 'teachers', label: 'FACULTY', icon: Users },
         { id: 'attendance', label: 'LOGS', icon: CalendarIcon },
       ];
-    } else {
+    } else if (managementMode === 'exams') {
       return [
         { id: 'exams', label: 'EXAMS', icon: Award },
         { id: 'progress', label: 'TRACKER', icon: Activity },
         { id: 'exam-export', label: 'ARCHIVE', icon: Archive },
+      ]
+    } else {
+      return [
+        { id: 'dashboard', label: 'CONSOLE', icon: LayoutDashboard },
+        { id: 'settings', label: 'SETUP', icon: Settings },
       ]
     }
   }, [navStructure, authUser, managementMode]);
@@ -228,6 +242,13 @@ const App: React.FC = () => {
               >
                 <Award className={`w-4 h-4 ${managementMode === 'exams' ? 'text-amber-400' : 'text-slate-500'}`} />
                 <span className="text-[7px] font-black mt-1 uppercase tracking-widest text-slate-400">EXAMS</span>
+              </button>
+              <button 
+                onClick={() => { setManagementMode('system'); setActiveTab('settings'); }}
+                className={`flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all ${managementMode === 'system' ? 'bg-[#0a0e1a] shadow-lg border border-white/10' : 'opacity-40 hover:opacity-100'}`}
+              >
+                <Settings className={`w-4 h-4 ${managementMode === 'system' ? 'text-rose-400' : 'text-slate-500'}`} />
+                <span className="text-[7px] font-black mt-1 uppercase tracking-widest text-slate-400">SYS</span>
               </button>
             </div>
           </div>
@@ -325,6 +346,7 @@ const App: React.FC = () => {
                 {activeTab === 'performance' && <StudentPerformanceView onViewStudent={(id) => setViewingStudentId(id)} />}
                 {activeTab === 'comparative' && <ComparativeAnalysisView />}
                 {activeTab === 'quality' && <AssessmentQualityView />}
+                {activeTab === 'settings' && <SettingsView />}
               </>
             )}
           </div>

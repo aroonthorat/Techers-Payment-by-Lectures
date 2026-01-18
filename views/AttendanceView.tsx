@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Lock, Calendar as CalIcon, User, Book, CheckCircle, ShieldAlert, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Calendar as CalIcon, User, Book, CheckCircle, AlertCircle } from 'lucide-react';
 import { Teacher, ClassType, Attendance, AttendanceStatus, AuthUser } from '../types';
 import { dbService } from '../firebase';
 
@@ -39,7 +38,6 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId, presel
   useEffect(() => { loadData(); }, []);
   useEffect(() => { loadContext(); }, [selectedTeacherId, selectedClassId]);
   
-  // Handle preselection updates
   useEffect(() => {
     if (preselectedTeacherId && !forcedTeacherId) {
       setSelectedTeacherId(preselectedTeacherId);
@@ -68,27 +66,22 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId, presel
 
     if (existing) {
       if (existing.status === AttendanceStatus.PAID) return;
-      
-      // Admin Verification Workflow
       if (isAdmin && existing.status === AttendanceStatus.SUBMITTED) {
         if (confirm("Verify this submitted lecture?")) {
           await dbService.verifyAttendance(existing.id);
-          loadContext();
+          await loadContext();
         }
         return;
       }
-
-      // Teacher Workflow: Cannot toggle if verified
       if (!isAdmin && existing.status !== AttendanceStatus.SUBMITTED) {
         alert("Verified records cannot be modified. Contact administration.");
         return;
       }
     }
 
-    // Normal Toggle (Create Pending for Teacher, Create Verified for Admin)
     try {
       await dbService.toggleAttendance(selectedTeacherId, selectedClassId, dateStr, isAdmin);
-      loadContext();
+      await loadContext();
     } catch (err: any) { 
       alert(err.message); 
     }
@@ -97,102 +90,103 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId, presel
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
   const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   return (
-    <div className="space-y-8 animate-slide-up">
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-2xl md:text-4xl font-extrabold theme-text uppercase tracking-tighter">ATTENDANCE</h2>
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
-           <p className="text-xs md:text-sm font-medium theme-text-muted">
-            {forcedTeacherId ? 'Click a date to submit your lecture for approval.' : 'Review and verify staff submissions below.'}
-          </p>
-          <div className="flex gap-4">
-             <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Submitted (Pending)</span>
+    <div className="space-y-6 md:space-y-10 animate-slide-up pb-10">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h2 className="text-3xl md:text-5xl font-black theme-text uppercase tracking-tighter leading-tight">Attendance</h2>
+            <p className="text-[10px] md:text-xs font-bold theme-text-muted uppercase tracking-[0.2em] mt-1">
+              {forcedTeacherId ? 'Log your daily activity' : 'Manage institutional recordings'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-3 bg-[var(--bg-card)] p-4 rounded-2xl border theme-border">
+             <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-80">Pending</span>
              </div>
-             <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full theme-bg-primary"></div>
-                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Verified</span>
+             <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-orange-600"></div>
+                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-80">Verified</span>
              </div>
-             <div className="flex items-center gap-1.5">
+             <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-60">Paid</span>
+                <span className="text-[9px] font-black theme-text-muted uppercase tracking-widest opacity-80">Paid</span>
              </div>
           </div>
         </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2 animate-slide-up stagger-1">
-          <label className="text-[10px] font-extrabold theme-text-muted uppercase tracking-widest ml-1 flex items-center gap-2">
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-black theme-text-muted uppercase tracking-widest ml-1 flex items-center gap-2">
             <User className="w-3 h-3 opacity-40" /> {forcedTeacherId ? 'YOUR PROFILE' : 'TEACHER SELECTION'}
           </label>
-          <div className="relative">
+          <div className="relative group">
             <select 
-              className="w-full px-6 py-4 theme-card rounded-2xl text-sm font-extrabold theme-text appearance-none outline-none focus:border-[var(--primary)] transition-all shadow-sm focus:ring-4 focus:ring-[var(--primary-light)] disabled:bg-[var(--bg-card)] disabled:text-[var(--text-muted)]"
+              className="w-full h-14 px-6 theme-card rounded-2xl text-xs md:text-sm font-black theme-text appearance-none outline-none focus:border-amber-500 transition-all shadow-sm focus:ring-4 focus:ring-amber-500/10 disabled:opacity-50"
               value={selectedTeacherId}
               disabled={!!forcedTeacherId}
               onChange={e => setSelectedTeacherId(e.target.value)}
             >
-              <option value="">Choose Staff Profile</option>
+              <option value="">Choose Staff Member</option>
               {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            {!forcedTeacherId && <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted rotate-90 pointer-events-none" />}
+            <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted rotate-90 pointer-events-none group-hover:theme-primary transition-colors" />
           </div>
         </div>
         
-        <div className="flex flex-col gap-2 animate-slide-up stagger-2">
-          <label className="text-[10px] font-extrabold theme-text-muted uppercase tracking-widest ml-1 flex items-center gap-2">
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-black theme-text-muted uppercase tracking-widest ml-1 flex items-center gap-2">
             <Book className="w-3 h-3 opacity-40" /> ACADEMIC CLASS
           </label>
-          <div className="relative">
+          <div className="relative group">
             <select 
-              className="w-full px-6 py-4 theme-card rounded-2xl text-sm font-extrabold theme-text appearance-none outline-none focus:border-[var(--primary)] transition-all shadow-sm focus:ring-4 focus:ring-[var(--primary-light)] disabled:opacity-40"
+              className="w-full h-14 px-6 theme-card rounded-2xl text-xs md:text-sm font-black theme-text appearance-none outline-none focus:border-amber-500 transition-all shadow-sm focus:ring-4 focus:ring-amber-500/10 disabled:opacity-40"
               value={selectedClassId}
               disabled={!selectedTeacherId}
               onChange={e => setSelectedClassId(e.target.value)}
             >
-              <option value="">Choose Class Batch</option>
+              <option value="">Choose Targeted Class</option>
               {assignedClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted rotate-90 pointer-events-none" />
+            <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted rotate-90 pointer-events-none group-hover:theme-primary transition-colors" />
           </div>
         </div>
       </div>
 
-      <div className="theme-card rounded-[2.5rem] shadow-xl border overflow-hidden animate-slide-up stagger-3">
-        <div className="p-6 md:p-10 flex items-center justify-between bg-[var(--bg-card)] border-b theme-border">
-          <h3 className="text-xl font-extrabold theme-text uppercase tracking-tighter">
+      <div className="theme-card rounded-[2.5rem] shadow-2xl border theme-border overflow-hidden animate-slide-up">
+        <div className="p-6 md:p-10 flex items-center justify-between bg-white/[0.02] border-b theme-border">
+          <h3 className="text-xl md:text-2xl font-black theme-text uppercase tracking-tighter">
             {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
           </h3>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <button 
               onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} 
-              className="p-3 theme-card rounded-xl hover:bg-[var(--bg-main)] transition-all active:scale-90 shadow-sm"
+              className="p-3 theme-card rounded-xl hover:bg-amber-500 hover:text-white transition-all active:scale-90 shadow-sm border theme-border"
             >
-              <ChevronLeft className="w-5 h-5 theme-text" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <button 
               onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} 
-              className="p-3 theme-card rounded-xl hover:bg-[var(--bg-main)] transition-all active:scale-90 shadow-sm"
+              className="p-3 theme-card rounded-xl hover:bg-amber-500 hover:text-white transition-all active:scale-90 shadow-sm border theme-border"
             >
-              <ChevronRight className="w-5 h-5 theme-text" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-7 gap-px bg-[var(--border)]">
           {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
-            <div key={d} className="py-4 text-center text-[10px] font-extrabold theme-text-muted uppercase tracking-widest bg-[var(--bg-card)]">{d}</div>
+            <div key={d} className="py-4 text-center text-[9px] font-black theme-text-muted uppercase tracking-widest bg-[var(--bg-card)]">{d}</div>
           ))}
         </div>
         
-        <div className="grid grid-cols-7 gap-px bg-[var(--border)]">
-          {Array.from({ length: firstDay }).map((_, i) => <div key={i} className="bg-[var(--bg-card)] opacity-40 h-24 md:h-36"></div>)}
+        <div className="grid grid-cols-7 gap-px bg-[var(--border)] overflow-hidden">
+          {Array.from({ length: firstDay }).map((_, i) => <div key={i} className="bg-[var(--bg-card)] opacity-30 h-24 md:h-40"></div>)}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
             const dateStr = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day).toISOString().split('T')[0];
@@ -202,38 +196,36 @@ const AttendanceView: React.FC<AttendanceViewProps> = ({ forcedTeacherId, presel
             const isSubmitted = record?.status === AttendanceStatus.SUBMITTED;
             const isFuture = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day) > today;
             
-            // Logic for visual state
-            let boxClass = 'cursor-pointer hover:bg-[var(--primary-light)]/20';
-            if (isFuture) boxClass = 'opacity-30 pointer-events-none cursor-default';
+            let boxClass = 'cursor-pointer hover:bg-amber-500/10';
+            if (isFuture) boxClass = 'opacity-30 pointer-events-none cursor-default bg-slate-900/5';
             if (isPaid) boxClass = 'cursor-default';
-            // Teachers cannot modify verified records
-            if (!isAdmin && isVerified) boxClass = 'cursor-default opacity-80';
+            if (!isAdmin && isVerified) boxClass = 'cursor-default opacity-90';
 
             return (
               <div 
                 key={day} 
                 onClick={() => !isPaid && !isFuture && toggleDay(day)}
                 className={`
-                  bg-[var(--bg-card)] h-24 md:h-36 p-4 relative transition-all duration-300 flex flex-col items-center justify-center group overflow-hidden
+                  bg-[var(--bg-card)] h-24 md:h-40 p-2 md:p-4 relative transition-all duration-300 flex flex-col items-center justify-center group
                   ${boxClass}
                 `}
               >
-                <span className={`text-sm font-extrabold mb-1 transition-colors ${isPaid ? 'text-emerald-500' : isVerified ? 'theme-primary' : isSubmitted ? 'text-amber-500' : 'theme-text-muted opacity-40 group-hover:opacity-80'}`}>
+                <span className={`text-xs md:text-sm font-black mb-2 md:mb-4 transition-colors ${isPaid ? 'text-emerald-500' : isVerified ? 'text-orange-600' : isSubmitted ? 'text-amber-400' : 'theme-text-muted opacity-40 group-hover:opacity-100'}`}>
                   {day < 10 ? `0${day}` : day}
                 </span>
                 
                 {record && (
                   <div className={`
-                    w-full h-12 md:h-16 rounded-2xl flex items-center justify-center border transition-all duration-300 shadow-sm animate-in zoom-in-50 duration-200
-                    ${isPaid ? 'bg-emerald-500 border-emerald-600' : isVerified ? 'theme-bg-primary border-[var(--primary)]' : 'bg-amber-500 border-amber-600'}
-                    group-active:scale-90
+                    w-full h-10 md:h-16 rounded-xl md:rounded-2xl flex items-center justify-center border transition-all duration-300 shadow-lg animate-in zoom-in-50
+                    ${isPaid ? 'bg-emerald-500 border-emerald-400' : isVerified ? 'bg-orange-600 border-orange-500' : 'bg-amber-400 border-amber-300'}
+                    group-active:scale-95
                   `}>
                     {isPaid ? <Lock className="w-4 h-4 md:w-5 md:h-5 text-white" /> : isVerified ? <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-white" /> : <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-white animate-pulse" />}
                   </div>
                 )}
                 
                 {!record && !isFuture && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)] group-hover:theme-bg-primary transition-colors" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)] group-hover:bg-amber-500 transition-colors" />
                 )}
               </div>
             );
