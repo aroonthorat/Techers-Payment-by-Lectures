@@ -9,22 +9,14 @@ import {
   FileText, 
   Globe, 
   Briefcase, 
-  Shield, 
-  Zap, 
-  Clock, 
   Settings, 
   LogOut, 
   Home, 
   GraduationCap, 
   IndianRupee, 
   Menu, 
-  Download, 
   AlertCircle, 
-  Database, 
   UserCheck, 
-  ChevronRight, 
-  Smartphone,
-  X,
   LayoutGrid,
   ClipboardCheck,
   Award,
@@ -34,9 +26,9 @@ import {
   ShieldCheck,
   Activity
 } from 'lucide-react';
-import { AuthUser, AppConfig } from './types';
-// UPDATED IMPORT
-import { dbService } from './lib/netlify-client';
+import { AuthUser } from './types';
+import { dbService } from './firebase';
+import { useGoogleDriveSync } from './hooks/useGoogleDriveSync';
 
 // Views
 import DashboardView from './views/DashboardView';
@@ -80,6 +72,9 @@ const App: React.FC = () => {
   const [navParams, setNavParams] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>('midnight'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+
+  // Initialize Cloud Sync Hook (Runs in background)
+  useGoogleDriveSync();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme === 'corporate' ? '' : theme);

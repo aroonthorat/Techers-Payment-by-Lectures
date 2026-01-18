@@ -16,11 +16,14 @@ import {
   ShieldCheck,
   UploadCloud,
   Zap,
-  Globe
+  Globe,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { AttendanceStatus, SystemEvent } from '../types';
-import { dbService } from '../lib/netlify-client';
-import { GoogleDriveService } from '../utils/GoogleDriveService';
+import { dbService } from '../firebase';
+import { useGoogleDriveSync } from '../hooks/useGoogleDriveSync';
 
 const DashboardView: React.FC = () => {
   const [stats, setStats] = useState({ 
@@ -33,73 +36,55 @@ const DashboardView: React.FC = () => {
     pendingFees: 0
   });
   const [events, setEvents] = useState<SystemEvent[]>([]);
-  const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(localStorage.getItem('edupay_last_sync'));
+  
+  const { status: syncStatus, lastSyncTime, isAuthenticated, login, syncToDrive, restoreFromDrive } = useGoogleDriveSync();
 
   const load = async () => {
-    try {
-      const [t, c, a, p, logs, s, fp] = await Promise.all([
-        dbService.getTeachers(), 
-        dbService.getClasses(), 
-        dbService.getAttendance(),
-        dbService.getPayments(), 
-        dbService.getActivityLog(),
-        dbService.getStudents(),
-        dbService.getFeePayments()
-      ]);
+    const [t, c, a, p, logs, s, fp] = await Promise.all([
+      dbService.getTeachers(), 
+      dbService.getClasses(), 
+      dbService.getAttendance(),
+      dbService.getPayments(), 
+      dbService.getActivityLog(),
+      dbService.getStudents(),
+      dbService.getFeePayments()
+    ]);
 
-      const totalExpectedFee = s.reduce((sum: number, stu: any) => sum + (stu.enrollments?.reduce((eSum: number, enr: any) => eSum + enr.totalFee, 0) || 0), 0);
-      const totalCollected = fp.reduce((sum: number, curr: any) => sum + curr.amount, 0);
+    const totalExpectedFee = s.reduce((sum, stu) => sum + (stu.enrollments?.reduce((eSum, enr) => eSum + enr.totalFee, 0) || 0), 0);
+    const totalCollected = fp.reduce((sum, curr) => sum + curr.amount, 0);
 
-      setStats({
-        teacherCount: t.length, 
-        classCount: c.length,
-        pendingLecs: a.filter((item: any) => item.status === AttendanceStatus.SUBMITTED).length,
-        totalPaidSalaries: p.reduce((sum: number, curr: any) => sum + curr.amount, 0),
-        studentCount: s.length,
-        totalRevenue: totalCollected,
-        pendingFees: totalExpectedFee - totalCollected
-      });
-      setEvents(logs);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleDriveSync = async () => {
-    setSyncing(true);
-    try {
-      const localData = localStorage.getItem('edupay_v2_db');
-      if (localData) {
-        const success = await GoogleDriveService.syncToDrive(JSON.parse(localData));
-        if (success) {
-          setLastSync(new Date().toISOString());
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleDriveRestore = async () => {
-    if (!confirm("This will replace all local data with Drive backup. Continue?")) return;
-    setSyncing(true);
-    try {
-      const cloudData = await GoogleDriveService.fetchFromDrive();
-      if (cloudData) {
-        localStorage.setItem('edupay_v2_db', JSON.stringify(cloudData));
-        window.location.reload();
-      } else {
-        alert("No Drive backup found.");
-      }
-    } finally {
-      setSyncing(false);
-    }
+    setStats({
+      teacherCount: t.length, 
+      classCount: c.length,
+      pendingLecs: a.filter(item => item.status === AttendanceStatus.SUBMITTED).length,
+      totalPaidSalaries: p.reduce((sum, curr) => sum + curr.amount, 0),
+      studentCount: s.length,
+      totalRevenue: totalCollected,
+      pendingFees: totalExpectedFee - totalCollected
+    });
+    setEvents(logs);
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleManualBackup = async () => {
+    if (!isAuthenticated) {
+      const success = await login();
+      if (!success) return;
+    }
+    await syncToDrive();
+  };
+
+  const handleManualRestore = async () => {
+    if (!confirm("Overwrite local data with Google Drive backup?")) return;
+    const success = await restoreFromDrive();
+    if (success) {
+      alert("Restore complete. Refreshing...");
+      window.location.reload();
+    } else {
+      alert("Restore failed. Check console or connection.");
+    }
+  };
 
   return (
     <div className="space-y-6 md:space-y-10 animate-slide-up pb-10">
@@ -114,20 +99,27 @@ const DashboardView: React.FC = () => {
         
         <div className="flex items-center gap-2 bg-[#0a0e1a] p-2 rounded-2xl border border-white/5">
           <div className="px-4 border-r border-white/10 hidden lg:block">
-            <span className="text-[8px] font-black text-slate-500 uppercase block tracking-widest">Last Cloud Sync</span>
-            <span className="text-[11px] font-black text-white">{lastSync ? new Date(lastSync).toLocaleTimeString() : 'Inbound'}</span>
+            <span className="text-[8px] font-black text-slate-500 uppercase block tracking-widest">Cloud Status</span>
+            <div className="flex items-center gap-2">
+               {syncStatus === 'syncing' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+               {syncStatus === 'synced' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+               {syncStatus === 'error' && <AlertTriangle className="w-3 h-3 text-rose-500" />}
+               <span className={`text-[11px] font-black ${syncStatus === 'error' ? 'text-rose-500' : 'text-white'}`}>
+                 {syncStatus === 'idle' ? 'Idle' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Synced' : 'Error'}
+               </span>
+            </div>
           </div>
           <button 
-            onClick={handleDriveSync}
-            disabled={syncing}
+            onClick={handleManualBackup}
+            disabled={syncStatus === 'syncing'}
             className="flex items-center gap-2.5 h-12 px-5 bg-amber-500 text-[#050810] rounded-xl hover:brightness-110 transition-all disabled:opacity-50 font-black btn-active shadow-lg shadow-amber-500/10"
           >
-            <UploadCloud className={`w-4 h-4 ${syncing ? 'animate-bounce' : ''}`} />
+            <UploadCloud className={`w-4 h-4 ${syncStatus === 'syncing' ? 'animate-bounce' : ''}`} />
             <span className="text-[10px] uppercase tracking-widest">Backup</span>
           </button>
           <button 
-            onClick={handleDriveRestore}
-            disabled={syncing}
+            onClick={handleManualRestore}
+            disabled={syncStatus === 'syncing'}
             className="flex items-center gap-2.5 h-12 px-5 bg-blue-600 text-white rounded-xl hover:brightness-110 transition-all disabled:opacity-50 font-black btn-active shadow-lg shadow-blue-600/10"
           >
             <Download className="w-4 h-4" />
@@ -204,27 +196,31 @@ const DashboardView: React.FC = () => {
            <div className="space-y-6 relative z-10">
               <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5">
                 <div className="flex items-center gap-3 mb-4">
-                   <div className={`w-2.5 h-2.5 rounded-full ${lastSync ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-rose-500 animate-pulse'}`}></div>
-                   <span className="text-[10px] font-black uppercase tracking-widest">{lastSync ? 'Node Status: Synchronized' : 'Node Status: Local'}</span>
+                   <div className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-rose-500 animate-pulse'}`}></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest">{isAuthenticated ? 'Authenticated' : 'Offline / Signed Out'}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                    <div className="p-4 bg-[#050810] rounded-2xl border border-white/5">
-                      <span className="text-[8px] text-slate-500 uppercase block mb-1 tracking-widest">Primary</span>
-                      <span className="text-[10px] font-black uppercase">LocalStorage</span>
+                      <span className="text-[8px] text-slate-500 uppercase block mb-1 tracking-widest">Storage</span>
+                      <span className="text-[10px] font-black uppercase">
+                        {dbService.isOnline() ? 'Firebase Cloud' : 'Local + Drive'}
+                      </span>
                    </div>
                    <div className="p-4 bg-[#050810] rounded-2xl border border-white/5">
-                      <span className="text-[8px] text-slate-500 uppercase block mb-1 tracking-widest">Secondary</span>
-                      <span className="text-[10px] font-black uppercase flex items-center gap-2"><Globe className="w-3.5 h-3.5 text-blue-400" /> G-Drive</span>
+                      <span className="text-[8px] text-slate-500 uppercase block mb-1 tracking-widest">Last Sync</span>
+                      <span className="text-[10px] font-black uppercase flex items-center gap-2">
+                        {lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Never'}
+                      </span>
                    </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                 <button onClick={handleDriveSync} className="flex flex-col items-center justify-center gap-3 py-6 bg-amber-500/10 border border-amber-500/20 rounded-[2rem] hover:bg-amber-500/20 transition-all group btn-active">
+                 <button onClick={handleManualBackup} disabled={syncStatus === 'syncing'} className="flex flex-col items-center justify-center gap-3 py-6 bg-amber-500/10 border border-amber-500/20 rounded-[2rem] hover:bg-amber-500/20 transition-all group btn-active">
                     <Cloud className="w-6 h-6 text-amber-500 group-hover:scale-110 transition-transform" />
                     <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">Force Sync</span>
                  </button>
-                 <button onClick={async () => { await load(); }} className="flex flex-col items-center justify-center gap-3 py-6 bg-blue-500/10 border border-blue-500/20 rounded-[2rem] hover:bg-blue-500/20 transition-all group btn-active">
+                 <button onClick={load} className="flex flex-col items-center justify-center gap-3 py-6 bg-blue-500/10 border border-blue-500/20 rounded-[2rem] hover:bg-blue-500/20 transition-all group btn-active">
                     <RefreshCcw className="w-6 h-6 text-blue-400 group-hover:rotate-180 transition-transform duration-500" />
                     <span className="text-[9px] font-black uppercase tracking-widest text-blue-200">Refresh</span>
                  </button>
@@ -232,7 +228,7 @@ const DashboardView: React.FC = () => {
 
               <div className="p-6 bg-amber-500/5 rounded-[2rem] border border-amber-500/10 text-center">
                  <p className="text-[8px] font-black text-amber-500/60 uppercase tracking-widest leading-relaxed">
-                    Access the secure settings tab to perform data maintenance or node reset operations.
+                    System automatically backs up data to Google Drive every 5 minutes when authenticated.
                  </p>
               </div>
            </div>
