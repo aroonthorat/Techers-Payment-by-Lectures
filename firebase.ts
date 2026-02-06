@@ -1,32 +1,32 @@
 
 import { initializeApp, getApps, FirebaseApp, getApp } from "firebase/app";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  getDocs, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
   getDoc,
-  query, 
-  where, 
-  orderBy, 
-  limit, 
+  query,
+  where,
+  orderBy,
+  limit,
   writeBatch,
   Firestore,
   setDoc,
   Timestamp,
   enableIndexedDbPersistence
 } from "firebase/firestore";
-import { 
-  Teacher, 
-  ClassType, 
-  Attendance, 
-  AttendanceStatus, 
-  TeacherAssignment, 
-  SystemEvent, 
-  EventType, 
+import {
+  Teacher,
+  ClassType,
+  Attendance,
+  AttendanceStatus,
+  TeacherAssignment,
+  SystemEvent,
+  EventType,
   Payment,
   Advance,
   Student,
@@ -75,7 +75,7 @@ if (isFirebaseEnabled) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
-    
+
     try {
       enableIndexedDbPersistence(db).catch((err) => {
         if (err.code === 'failed-precondition') {
@@ -84,8 +84,8 @@ if (isFirebaseEnabled) {
           console.warn("Persistence is not available in this browser");
         }
       });
-    } catch (e) {}
-    
+    } catch (e) { }
+
   } catch (error) {
     console.error("Firebase Initialization Error:", error);
   }
@@ -110,7 +110,7 @@ export const dbService = {
     if (!db) throw new Error("Connect Firebase first to migrate.");
     const local = getLocalData();
     const collections = Object.keys(local);
-    
+
     for (const col of collections) {
       const items = local[col];
       for (const item of items) {
@@ -123,7 +123,7 @@ export const dbService = {
   getExams: async (): Promise<Exam[]> => {
     if (db) {
       const snap = await getDocs(collection(db, 'exams'));
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as Exam));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() as any } as Exam));
     }
     return getLocalData().exams;
   },
@@ -131,7 +131,7 @@ export const dbService = {
   getSubjects: async (): Promise<Subject[]> => {
     if (db) {
       const snap = await getDocs(collection(db, 'subjects'));
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as Subject));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() as any } as Subject));
     }
     return getLocalData().subjects;
   },
@@ -152,7 +152,7 @@ export const dbService = {
     if (db) {
       const q = query(collection(db, 'examSubjects'), where('examId', '==', examId));
       const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamSubject));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() as any } as ExamSubject));
     }
     return getLocalData().examSubjects.filter((es: any) => es.examId === examId);
   },
@@ -161,7 +161,7 @@ export const dbService = {
     if (db) {
       const q = query(collection(db, 'examPapers'), where('examId', '==', examId), orderBy('paperOrder', 'asc'));
       const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as ExamPaper));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() as any } as ExamPaper));
     }
     return getLocalData().examPapers.filter((ep: any) => ep.examId === examId).sort((a: any, b: any) => a.paperOrder - b.paperOrder);
   },
@@ -180,7 +180,7 @@ export const dbService = {
       let q = collection(db, 'teacherExamAssignments') as any;
       if (teacherId) q = query(q, where('teacherId', '==', teacherId));
       const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as TeacherExamAssignment));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() as any } as TeacherExamAssignment));
     }
     let res = getLocalData().teacherExamAssignments;
     if (teacherId) res = res.filter((a: any) => a.teacherId === teacherId);
@@ -204,11 +204,11 @@ export const dbService = {
       );
       if (filters.teacherId) q = query(q, where('teacherId', '==', filters.teacherId));
       const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as MarkEntry));
+      return snap.docs.map(d => ({ id: d.id, ...d.data() as any } as MarkEntry));
     }
-    return getLocalData().markEntries.filter((m: any) => 
-      m.examId === filters.examId && 
-      m.subjectId === filters.subjectId && 
+    return getLocalData().markEntries.filter((m: any) =>
+      m.examId === filters.examId &&
+      m.subjectId === filters.subjectId &&
       m.paperId === filters.paperId &&
       (!filters.teacherId || m.teacherId === filters.teacherId)
     );
@@ -219,7 +219,7 @@ export const dbService = {
       let q = collection(db, 'markEntries') as any;
       if (f.examId) q = query(q, where('examId', '==', f.examId));
       const snap = await getDocs(q);
-      let data = snap.docs.map(d => ({ id: d.id, ...d.data() } as MarkEntry));
+      let data = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as MarkEntry));
       return data.filter(m => {
         if (f.classIds && !f.classIds.includes(m.class)) return false;
         if (f.divisions && !f.divisions.includes(m.division)) return false;
@@ -273,13 +273,13 @@ export const dbService = {
       dbService.getExamPapers(examId),
       dbService.getTeacherExamAssignments()
     ]);
-    const eligibleStudents = students.filter(s => 
+    const eligibleStudents = students.filter(s =>
       s.enrollments.some(enr => enr.classId === exam.class) && s.medium === exam.medium
     );
     const batch: MarkEntry[] = [];
     for (const student of eligibleStudents) {
       for (const paper of papers) {
-        const assignment = assignments.find(a => 
+        const assignment = assignments.find(a =>
           a.examId === examId && a.paperId === paper.id && a.medium === student.medium && a.class === exam.class
         );
         const entry: MarkEntry = {
@@ -311,14 +311,14 @@ export const dbService = {
       const docRef = doc(db, 'system_config', 'mobile_app');
       const snap = await getDoc(docRef);
       if (snap.exists()) return snap.data() as AppConfig;
-    } catch (e) {}
+    } catch (e) { }
     return null;
   },
 
   getTeachers: async (): Promise<Teacher[]> => {
     if (db) {
       const snapshot = await getDocs(collection(db, 'teachers'));
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Teacher));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as Teacher));
     }
     return getLocalData().teachers;
   },
@@ -326,7 +326,7 @@ export const dbService = {
   getClasses: async (): Promise<ClassType[]> => {
     if (db) {
       const snapshot = await getDocs(collection(db, 'classes'));
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ClassType));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as ClassType));
     }
     return getLocalData().classes;
   },
@@ -334,7 +334,7 @@ export const dbService = {
   getStudents: async (): Promise<Student[]> => {
     if (db) {
       const snapshot = await getDocs(collection(db, 'students'));
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Student));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as Student));
     }
     return getLocalData().students;
   },
@@ -356,7 +356,7 @@ export const dbService = {
       let q = query(collection(db, 'advances'), orderBy('date', 'desc'));
       if (teacherId) q = query(collection(db, 'advances'), where('teacherId', '==', teacherId), orderBy('date', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Advance));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as Advance));
     }
     const data = getLocalData();
     let res = data.advances;
@@ -381,7 +381,7 @@ export const dbService = {
     if (db) {
       const q = query(collection(db, 'payments'), orderBy('datePaid', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as Payment));
     }
     return [...getLocalData().payments].sort((a, b) => new Date(b.datePaid).getTime() - new Date(a.datePaid).getTime());
   },
@@ -389,7 +389,7 @@ export const dbService = {
   getFeePayments: async (): Promise<FeePayment[]> => {
     if (db) {
       const snapshot = await getDocs(collection(db, 'feePayments'));
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeePayment));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as FeePayment));
     }
     return getLocalData().feePayments;
   },
@@ -407,7 +407,7 @@ export const dbService = {
     if (db) {
       const q = query(collection(db, 'activityLog'), orderBy('timestamp', 'desc'), limit(100));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SystemEvent));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as SystemEvent));
     }
     return [...getLocalData().activityLog].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 100);
   },
@@ -473,7 +473,7 @@ export const dbService = {
       if (teacherId && classId) q = query(collection(db, 'attendance'), where('teacherId', '==', teacherId), where('classId', '==', classId), orderBy('date', 'desc'));
       else if (teacherId) q = query(collection(db, 'attendance'), where('teacherId', '==', teacherId), orderBy('date', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Attendance));
+      return snapshot.docs.map(d => ({ id: d.id, ...d.data() as any } as Attendance));
     }
     const data = getLocalData();
     let res = data.attendance;
@@ -569,7 +569,7 @@ export const dbService = {
       const paymentId = generateId();
       const deduction = Math.min(req.amount, runningDeductionPool);
       runningDeductionPool -= deduction;
-      data.payments.push({ id: paymentId, teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction, lectureCount: req.lectureCount, datePaid: new Date().toISOString(), startDateCovered: pending[0].date, endDateCovered: pending[pending.length-1].date });
+      data.payments.push({ id: paymentId, teacherId, classId: req.classId, amount: req.amount, advanceDeduction: deduction, netDisbursement: req.amount - deduction, lectureCount: req.lectureCount, datePaid: new Date().toISOString(), startDateCovered: pending[0].date, endDateCovered: pending[pending.length - 1].date });
       pending.forEach((p: any) => { p.status = AttendanceStatus.PAID; p.paymentId = paymentId; });
     }
     saveLocalData(data);
@@ -590,39 +590,39 @@ export const dbService = {
 
   seedDatabase: async () => {
     await dbService.clearDatabase();
-    
+
     // 1. Create Core Batches
     const c1 = await dbService.addClass({ name: '12th SCIENCE - MH BOARD', batchSize: 28 });
     const c2 = await dbService.addClass({ name: '11th SCIENCE - MH BOARD', batchSize: 30 });
     const c3 = await dbService.addClass({ name: 'NEET REPEATER BATCH', batchSize: 24 });
     const c4 = await dbService.addClass({ name: 'JEE INTENSIVE 2026', batchSize: 32 });
-    
+
     // 2. Create Faculty Members (Teachers)
-    const t1 = await dbService.addTeacher({ 
-      name: 'PROF. KHAN ARSHAD', 
-      phone: '9822001122', 
+    const t1 = await dbService.addTeacher({
+      name: 'PROF. KHAN ARSHAD',
+      phone: '9822001122',
       assignments: [
         { classId: c1.id, subject: 'Physics', rate: 120000, activeFrom: '2025-01-01' },
         { classId: c2.id, subject: 'Mathematics', rate: 100000, activeFrom: '2025-01-01' }
-      ] 
+      ]
     });
-    
-    const t2 = await dbService.addTeacher({ 
-      name: 'DR. SNEHA DESHMUKH', 
-      phone: '9911223344', 
+
+    const t2 = await dbService.addTeacher({
+      name: 'DR. SNEHA DESHMUKH',
+      phone: '9911223344',
       assignments: [
         { classId: c1.id, subject: 'Biology', rate: 85000, activeFrom: '2025-01-01' },
         { classId: c3.id, subject: 'Botany', rate: 90000, activeFrom: '2025-01-01' }
-      ] 
+      ]
     });
 
-    const t3 = await dbService.addTeacher({ 
-      name: 'PROF. AMIT VERMA', 
-      phone: '9001122334', 
+    const t3 = await dbService.addTeacher({
+      name: 'PROF. AMIT VERMA',
+      phone: '9001122334',
       assignments: [
         { classId: c4.id, subject: 'Chemistry', rate: 110000, activeFrom: '2025-01-01' },
         { classId: c1.id, subject: 'Organic Chemistry', rate: 95000, activeFrom: '2025-01-01' }
-      ] 
+      ]
     });
 
     // 3. Create Student Directory
@@ -667,7 +667,7 @@ export const dbService = {
     // Verified & Ready for Payment
     await dbService.toggleAttendance(t1.id, c1.id, dates[0], true);
     await dbService.toggleAttendance(t2.id, c1.id, dates[0], true);
-    
+
     // Submitted & Pending Review
     await dbService.toggleAttendance(t1.id, c2.id, dates[1], false);
     await dbService.toggleAttendance(t3.id, c4.id, dates[1], false);
@@ -675,7 +675,7 @@ export const dbService = {
 
     // 6. Log System Events
     await dbService.logEvent(EventType.TEACHER_ADD, 'SYSTEM', 'Initialized Comprehensive Trial Database');
-    
+
     // 7. Academic Assessment Structure
     const exam = await dbService.addExam({
       examName: 'UNIT EVALUATION - I', examType: 'Unit Test', academicYear: '2025-26',

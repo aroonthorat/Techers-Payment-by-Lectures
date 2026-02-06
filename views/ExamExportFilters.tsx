@@ -1,19 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { Filter, Award, BookOpen, Layers, Globe, Search, RefreshCw, Bookmark } from 'lucide-react';
-import { Exam, ClassType, MediumType, ExamExportFilters, Teacher, ExamPaper, ExamSubject } from '../types';
+import { Exam, ClassType, MediumType, ExamExportFilters as ExamExportFiltersType, Teacher, ExamPaper, ExamSubject } from '../types';
 import { dbService } from '../firebase';
 
 interface Props {
   exams: Exam[];
   classes: ClassType[];
   teachers: Teacher[];
-  onApply: (filters: ExamExportFilters) => void;
+  onApply: (filters: ExamExportFiltersType) => void;
   isLoading: boolean;
 }
 
 const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply, isLoading }) => {
-  const [filters, setFilters] = useState<ExamExportFilters>({
+  const [filters, setFilters] = useState<ExamExportFiltersType>({
     examId: '',
     classIds: [],
     divisions: [],
@@ -35,11 +35,11 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
     }
   }, [filters.examId]);
 
-  const toggleMulti = (key: keyof ExamExportFilters, val: any) => {
+  const toggleMulti = (key: keyof ExamExportFiltersType, val: any) => {
     setFilters(prev => {
       const current = (prev[key] as any[]) || [];
-      const updated = current.includes(val) 
-        ? current.filter(item => item !== val) 
+      const updated = current.includes(val)
+        ? current.filter(item => item !== val)
         : [...current, val];
       return { ...prev, [key]: updated };
     });
@@ -60,9 +60,9 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
       {/* Primary Exam Picker */}
       <div className="space-y-2">
         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Academic Cycle</label>
-        <select 
+        <select
           value={filters.examId}
-          onChange={e => setFilters({...filters, examId: e.target.value})}
+          onChange={e => setFilters({ ...filters, examId: e.target.value })}
           className="w-full bg-[#050810] border border-white/10 rounded-xl px-4 py-3.5 text-xs font-black text-white outline-none focus:border-amber-500 appearance-none uppercase"
         >
           <option value="">Select Exam...</option>
@@ -79,14 +79,13 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
         </label>
         <div className="flex flex-wrap gap-2">
           {['English', 'Semi-English', 'Urdu'].map(m => (
-            <button 
+            <button
               key={m}
               onClick={() => toggleMulti('mediums', m)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${
-                filters.mediums?.includes(m as MediumType) 
-                ? 'bg-amber-500 border-amber-400 text-white' 
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${filters.mediums?.includes(m as MediumType)
+                ? 'bg-amber-500 border-amber-400 text-white'
                 : 'bg-white/5 border-white/5 text-slate-500 hover:text-white'
-              }`}
+                }`}
             >
               {m}
             </button>
@@ -101,14 +100,13 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
         </label>
         <div className="space-y-1.5">
           {classes.map(c => (
-            <button 
+            <button
               key={c.id}
               onClick={() => toggleMulti('classIds', c.id)}
-              className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${
-                filters.classIds?.includes(c.id)
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
+              className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${filters.classIds?.includes(c.id)
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
                 : 'bg-white/5 border-white/5 text-slate-500'
-              }`}
+                }`}
             >
               {c.name}
             </button>
@@ -123,14 +121,13 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
         </label>
         <div className="grid grid-cols-4 gap-2">
           {['A', 'B', 'C', 'D'].map(d => (
-            <button 
+            <button
               key={d}
               onClick={() => toggleMulti('divisions', d)}
-              className={`py-2 rounded-lg text-[10px] font-black transition-all border ${
-                filters.divisions?.includes(d) 
-                ? 'bg-blue-500 border-blue-400 text-white' 
+              className={`py-2 rounded-lg text-[10px] font-black transition-all border ${filters.divisions?.includes(d)
+                ? 'bg-blue-500 border-blue-400 text-white'
                 : 'bg-white/5 border-white/5 text-slate-500'
-              }`}
+                }`}
             >
               {d}
             </button>
@@ -141,9 +138,9 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
       {/* Teacher Selection */}
       <div className="space-y-2">
         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Marking Personnel</label>
-        <select 
+        <select
           value={filters.teacherId}
-          onChange={e => setFilters({...filters, teacherId: e.target.value})}
+          onChange={e => setFilters({ ...filters, teacherId: e.target.value })}
           className="w-full bg-[#050810] border border-white/10 rounded-xl px-4 py-3.5 text-xs font-black text-white outline-none focus:border-amber-500 appearance-none uppercase"
         >
           <option value="">Any Teacher...</option>
@@ -151,7 +148,7 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
         </select>
       </div>
 
-      <button 
+      <button
         onClick={() => onApply(filters)}
         disabled={isLoading || !filters.examId}
         className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-30 text-white py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/10"
@@ -161,9 +158,9 @@ const ExamExportFilters: React.FC<Props> = ({ exams, classes, teachers, onApply,
       </button>
 
       <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-         <p className="text-[8px] font-bold text-slate-500 uppercase leading-relaxed text-center tracking-widest">
-            Complex queries are computed client-side to ensure maximum precision across draft and active cycles.
-         </p>
+        <p className="text-[8px] font-bold text-slate-500 uppercase leading-relaxed text-center tracking-widest">
+          Complex queries are computed client-side to ensure maximum precision across draft and active cycles.
+        </p>
       </div>
     </div>
   );
